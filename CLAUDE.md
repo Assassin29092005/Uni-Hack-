@@ -62,9 +62,10 @@ paste a garbage SKU to see what happens.
 ## Stack (defaults — change if a reason appears, not on taste)
 
 - **Python 3.11+**, FastAPI backend, Pydantic v2 for the schema.
-- **Claude** for extraction/enrichment (`claude-sonnet-5` for bulk, `claude-opus-5` for
-  hard/ambiguous records). Structured output via tool-use/JSON schema — never regex a
-  prose reply.
+- **LLM: provider-agnostic**, selected by the `LLM_PROVIDER` env var in `src/llm.py`.
+  Default `gemini` (free tier, no card). Also `ollama` (free, local, no account) and
+  `anthropic` (paid). All three take a schema-constrained JSON call — we never
+  regex a prose reply, and the prompts are identical across providers.
 - **SQLite** for storage. Postgres only if we actually hit a wall.
 - **Frontend**: whatever renders a table and a detail panel fastest. No SPA framework
   unless the demo needs interactivity that plain HTML can't do.
@@ -108,10 +109,24 @@ No fixtures, no framework ceremony. Keep a **golden set of ~10 real products** w
 hand-checked expected output — it is the only defense against a prompt tweak quietly
 regressing accuracy.
 
-## Demo priorities
+## Build plan
 
-Working end-to-end thin slice beats a half-built impressive architecture.
-Order: one product end-to-end → CSV batch → validation pass → UI → scale story.
+Working end-to-end thin slice beats a half-built impressive architecture. Each
+milestone is demoable on its own — never leave the repo in a state where nothing runs.
+
+| # | Milestone | Files | Done when |
+|---|---|---|---|
+| 1 | Schema | `src/models.py` | `Product` validates; provenance is unavoidable by construction |
+| 2 | Deterministic normalize | `src/normalize.py` | units/casing/synonyms fixed with zero model calls |
+| 3 | Enrich | `src/llm.py`, `src/enrich.py` | one sparse record → full `Product` with evidence per field |
+| 4 | Validate | `src/enrich.py` | second pass flags contradictions and downgrades confidence |
+| 5 | Persist | `src/store.py` | SQLite upsert by SKU + audit row per run; re-run is idempotent |
+| 6 | Batch CLI | `src/pipeline.py` | a CSV of N products runs end to end and resumes after Ctrl-C |
+| 7 | UI | `src/app.py` | table + detail panel showing value, evidence, confidence |
+| 8 | Scale story | — | numbers on throughput/cost, plus what breaks at 100k |
+
+Current position lives in `HANDOVER.md`, not here — this table is the route, that
+file is the odometer.
 
 Not now (say so out loud rather than silently building it): auth, multi-tenancy,
 user accounts, plugin systems, microservices, custom vector DB.

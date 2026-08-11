@@ -1,0 +1,6 @@
+pydantic>=2.10
+
+# Pick one provider (see src/llm.py). Gemini is the default: free tier, no card.
+google-genai>=1.0      # LLM_PROVIDER=gemini
+ollama>=0.4            # LLM_PROVIDER=ollama    (also needs the Ollama app running)
+# anthropic>=0.120     # LLM_PROVIDER=anthropic (paid)

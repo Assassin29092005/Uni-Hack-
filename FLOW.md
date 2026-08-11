@@ -2,69 +2,97 @@
 
 How execution actually travels — file to file, function to function, in order.
 
-> **STATUS: PLANNED, NOT ACTUAL.** No source code exists yet. Every path and function
-> name below is intended design, not something you can open. Do not trust a path in this
-> file until it moves to the ACTUAL section. As code lands, replace planned entries with
-> real `file.py:function()` references and delete the guesses.
-
-Last updated: 2026-08-11 22:57 IST
+Last updated: 2026-08-12 01:20 IST
 
 ---
 
 ## ACTUAL (verified against real code)
 
-*(empty — nothing implemented)*
+Entry point: `python -m src.pipeline <csv>` → [`pipeline.main`](src/pipeline.py:117)
+
+```
+main()                              src/pipeline.py:117
+ ├─ --show SKU ─► show()                           :97   read-only provenance view
+ └─ run(csv, db, force, workers)                   :59
+      ├─ store.connect(db)          src/store.py:49      creates schema if absent
+      ├─ ingest_csv(csv)            src/pipeline.py:28
+      │    └─ normalize_record()    src/normalize.py:95  ─► list[RawRecord]
+      ├─ store.is_done(sku)         src/store.py:57      ◄── the resumability gate
+      ├─ process_batch(todo)        src/enrich.py
+      │    ├─ llm.check_ready()     src/llm.py            fail fast on setup problems
+      │    └─ ThreadPoolExecutor ─► process()                    per record:
+      │         ├─ enrich_one()   ─► llm.structured_call()       model call 1
+      │         ├─ validate_one() ─► llm.structured_call()       model call 2
+      │         └─ apply_report()                                pure Python
+      ├─ store.save(product, report)      src/store.py:68   products + 2 audit rows
+      │  └─ (on failure) store.save_error()           :96   audit only, no product row
+      └─ store.summary()                             :115
+```
+
+**Stage-to-code map** (the conceptual pipeline in `CLAUDE.md`, grounded):
+
+| Stage | Where it lives | LLM? |
+|---|---|---|
+| ingest | `pipeline.ingest_csv` | no |
+| normalize | `normalize.normalize_record` | no |
+| enrich | `enrich.enrich_one` → `llm.structured_call` | **yes** |
+| validate | `enrich.validate_one` → `llm.structured_call` | **yes** |
+| score | `models.Product.completeness` / `.mean_confidence` / `.gaps` (properties) | no |
+| persist | `store.save` | no |
+
+### The provider seam
+
+Every model call in the project goes through exactly one function:
+`llm.structured_call(system, user, schema) -> BaseModel`. It picks a provider
+from `LLM_PROVIDER` (`gemini` default / `ollama` / `anthropic`), retries on
+rate limits, and validates the reply against the pydantic class before returning.
+
+No other file imports a vendor SDK. If you find yourself adding
+`import google.genai` or `import anthropic` outside `src/llm.py`, that's the
+seam leaking — put it behind `structured_call` instead. This is what makes
+switching providers a config change (DECISIONS 011).
+
+### Four invariants the flow depends on
+
+**1. `is_done` is checked before any model call.** `run()` filters the record
+list through `store.is_done` before `process_batch` is reached, so killing a
+catalog run and restarting re-pays for nothing. Move that check downstream and
+resumability silently disappears.
+
+**2. Enrich and validate are separate API calls with separate prompts.** They
+share a client, not a conversation — the validator has never seen the enrichment
+happen. Collapsing them into one call would produce a self-approving record and
+would remove the "AI validation" judging criterion from the demo.
+
+**3. Failures leave the catalog untouched but the audit populated.**
+`process_batch` catches per-record exceptions and returns them as a fourth tuple
+element rather than raising, so one bad record can't kill a 10k-row run.
+`run()` then calls `save_error`, which writes an audit row and **no** products
+row — a half-enriched product is worse than a missing one.
+
+**4. Setup failures abort; record failures don't.** `ProviderError` (missing key,
+Ollama not running) is deliberately re-raised past that catch. It would recur
+identically for every remaining record, so failing 10,000 rows one at a time
+would bury the single line telling the user what to fix.
+
+### Scoring is derived, never received
+
+`completeness`, `mean_confidence`, and `gaps` are `@property` on `Product`, so
+they are absent from the JSON schema sent to Claude and cannot be model-supplied.
+See DECISIONS 010.
 
 ---
 
-## PLANNED
+## PLANNED (not yet code)
 
-### Top-level pipeline
-
-```
-input (CSV / JSON / PDF / URL)
-  │
-  ├─► ingest      → raw records                  [deterministic]
-  ├─► normalize   → units, casing, synonyms      [deterministic]
-  ├─► enrich      → LLM fills gaps               [Claude, batched]
-  ├─► validate    → LLM + rules cross-check      [Claude + deterministic]
-  ├─► score       → per-field confidence, completeness %
-  └─► persist     → record + audit trail
-```
-
-Each stage takes a list of records and returns a list of records. Same shape in, same
-shape out — so any stage can be skipped, re-run, or tested in isolation. That uniformity
-is what makes the pipeline resumable.
-
-### Stage contracts
-
-| Stage | Input | Output | LLM? | Notes |
-|---|---|---|---|---|
-| ingest | file path / URL | `list[RawRecord]` | no | PDF path is the risky one |
-| normalize | `list[RawRecord]` | `list[RawRecord]` | no | pure function, easy to test |
-| enrich | `list[RawRecord]` | `list[Product]` | yes | batched; skips already-filled fields |
-| validate | `list[Product]` | `list[Product]` | yes | separate pass — a judging criterion |
-| score | `list[Product]` | `list[Product]` | no | derives from field confidences |
-| persist | `list[Product]` | ids | no | upsert by SKU, writes audit rows |
-
-### Why validate is its own pass
-
-Asking one call to both generate and check its own work in a single breath gets a model
-that rubber-stamps itself. A separate pass gets fresh context containing the claim and
-its evidence, and asks only "does this hold up?" It is also directly legible to a judge
-as the "AI validation" criterion, rather than being buried inside a generation prompt.
-
-### Resumability
-
-`enrich` must be idempotent: re-running over a record with populated fields skips them
-rather than regenerating. Enables killing and restarting a catalog run — which will
-happen during the demo — without duplicate rows or duplicate spend.
+- **Milestone 7 — UI** (`src/app.py`): FastAPI reading `store.load` / `store.summary`,
+  rendering the table plus the same per-field provenance view `show()` prints.
+- **Milestone 8 — scale**: Message Batches path alongside the thread pool
+  (DECISIONS 008).
+- **Golden set**: ~10 hand-checked products for regression-testing prompt edits.
 
 ---
 
 ## Currently modifying
 
 *(nothing in flight)*
-
-When work is in progress, name the exact stage and function being changed here, so the
-next session knows which part of the path is half-built.
