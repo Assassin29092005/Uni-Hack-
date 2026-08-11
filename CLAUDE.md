@@ -103,11 +103,22 @@ ingest → normalize → enrich (LLM) → validate → score → persist
 
 ## Testing
 
-One `test_pipeline.py` with assert-based checks on the parts that silently break:
-unit normalization, schema validation, confidence thresholds, idempotent re-runs.
-No fixtures, no framework ceremony. Keep a **golden set of ~10 real products** with
-hand-checked expected output — it is the only defense against a prompt tweak quietly
-regressing accuracy.
+Three layers, increasing in cost. Run the cheap one constantly, the expensive
+ones before claiming anything.
+
+| Command | Cost | Guards |
+|---|---|---|
+| `python test_pipeline.py` | free, ~1s | deterministic logic that breaks *silently*: normalization, confidence gating, scoring, store idempotency, provider schema dialects, HTML escaping |
+| `python -m src.probe` | ~6 API calls | that the validator actually objects — planted errors plus a clean **control** that must stay silent |
+| `python -m src.golden` | ~16 API calls | accuracy against hand-checked expectations in `data/golden.json`; headline metric is hallucination count |
+
+Assert-based, no framework, no fixtures. Two rules learned the hard way:
+
+- **A test that only checks something doesn't crash isn't a test.** The schema
+  test passed while emitting a schema Gemini rejected outright (BUG-001).
+- **Any measurement instrument needs a control and an error state.** The probe's
+  first version scored an API failure as a successful detection, because "found
+  issues" and "never ran" both produce a non-empty list.
 
 ## Build plan
 
@@ -123,7 +134,10 @@ milestone is demoable on its own — never leave the repo in a state where nothi
 | 5 | Persist | `src/store.py` | SQLite upsert by SKU + audit row per run; re-run is idempotent |
 | 6 | Batch CLI | `src/pipeline.py` | a CSV of N products runs end to end and resumes after Ctrl-C |
 | 7 | UI | `src/app.py` | table + detail panel showing value, evidence, confidence |
-| 8 | Scale story | — | numbers on throughput/cost, plus what breaks at 100k |
+| 8 | Scale story | `README.md` | numbers on throughput/cost, plus what breaks at 100k |
+
+Verification harnesses that grew out of the above: `src/probe.py` (does the
+validator actually object?) and `src/golden.py` (does enrichment hallucinate?).
 
 Current position lives in `HANDOVER.md`, not here — this table is the route, that
 file is the odometer.

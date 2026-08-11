@@ -83,13 +83,45 @@ See DECISIONS 010.
 
 ---
 
+### Second entry point: the UI
+
+`python -m src.app` → uvicorn → FastAPI. **Read-only** — it never enriches, it
+only renders what `pipeline` already persisted. That separation is why the demo
+is safe: the UI cannot be slowed or broken by a rate limit, because it makes no
+model calls at all.
+
+```
+GET /                 catalog()        store.summary + products table
+GET /product/{sku}    product_detail() store.load -> render_field() per field
+GET /api/products     api_products()   commerce-ready JSON
+GET /api/product/{sku}
+```
+
+`render_field()` is where the honest-gaps story becomes visible: a field below
+the publish threshold renders as a dashed box reading "no grounded value" with
+its reason, rather than being omitted. Everything it interpolates is model
+output, so it all goes through `esc()`.
+
+### Verification harnesses (both cost real API calls)
+
+```
+python -m src.probe    probe.main()  -> validate_one() per planted error
+python -m src.golden   golden.main() -> process() per golden record, then score()
+```
+
+Both call `enrich.is_unaudited()` on every report before scoring it. A report
+that says "the audit never ran" and one that says "I found three problems" are
+both non-empty issue lists, and an instrument that conflates them scores its own
+API failures as successful detections.
+
+---
+
 ## PLANNED (not yet code)
 
-- **Milestone 7 — UI** (`src/app.py`): FastAPI reading `store.load` / `store.summary`,
-  rendering the table plus the same per-field provenance view `show()` prints.
-- **Milestone 8 — scale**: Message Batches path alongside the thread pool
+- **Batch API path** alongside the thread pool for a real 100k-row catalog
   (DECISIONS 008).
-- **Golden set**: ~10 hand-checked products for regression-testing prompt edits.
+- **Per-field resume**: `is_done` currently skips whole records, not individual
+  ungrounded fields.
 
 ---
 

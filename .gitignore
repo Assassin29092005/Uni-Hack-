@@ -4,3 +4,5 @@ __pycache__/
 venv/
 catalog.db
 .env
+probe_result.txt
+golden_result.txt

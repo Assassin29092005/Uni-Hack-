@@ -23,7 +23,46 @@ The `Left out` line matters most under a deadline — it separates "not built ye
 
 ---
 
-## FEAT-001 — Enrichment pipeline, ingest through persist   [IN PROGRESS]
+## FEAT-002 — UI, and the two verification harnesses   [DONE]
+
+**Scoped:** Milestones 7–8 plus the evidence needed to defend the two judging
+criteria that were resting on assertion alone.
+
+**Why:** Backend correctness that nobody can see doesn't score. And "the AI
+validates its output" was, at that point, a claim supported by zero observations
+of the validator ever objecting to anything.
+
+**Design:**
+- `src/app.py` — FastAPI, one file, inline HTML, no build step. **Read-only**:
+  it renders what `pipeline` persisted and makes no model calls, so the demo
+  cannot be broken by a rate limit. `render_field()` shows ungrounded fields as
+  dashed boxes with their reason rather than hiding them — the refusal surface
+  is the product, not an omission. Everything interpolated is model output, so
+  all of it goes through `esc()`.
+- `src/probe.py` — plants one fault per validator check, plus a **control** that
+  must stay silent. Without the control a validator that flags everything scores
+  perfectly.
+- `src/golden.py` — scores against `data/golden.json`, weighted toward abstention
+  traps. Headline metric is hallucination count.
+
+**Progress / verified:** 0 hallucinations, 28/28 abstention, 24/25 grounding,
+4/4 known values, 4.2s/record. Validator caught 5/5 planted faults; control
+clean. Full tables in `README.md` → Results. UI routes smoke-tested; XSS
+escaping covered by `test_ui_escapes_model_output`.
+
+Two bugs surfaced and fixed while building this: BUG-002 (retries expired before
+the quota window reopened) and BUG-003 (the probe scored API failures as
+successful detections).
+
+**Left out:**
+- Automatic model rotation when a quota bucket empties — done manually via
+  `GEMINI_MODEL`. Worth building if free-tier runs become routine.
+- The probe's six cases have not yet run in one clean sweep (quota).
+- No auth on the UI. It's a read-only local demo; adding auth is out of scope.
+
+---
+
+## FEAT-001 — Enrichment pipeline, ingest through persist   [DONE]
 
 **Scoped:** Take a CSV of sparse industrial product records and produce
 structured, validated, provenance-carrying `Product` records in SQLite, resumable

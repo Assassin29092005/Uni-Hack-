@@ -132,6 +132,43 @@ def test_apply_report_edge_cases():
     assert product.completeness == 0.0, "an unaudited record is fully retracted"
 
 
+def test_unaudited_report_is_distinguishable():
+    """A validator that FOUND problems and one that NEVER RAN both produce a
+    non-empty issue list. Conflating them let an API failure be scored as a
+    successful detection in the first probe run — hence an explicit marker."""
+    from src.enrich import UNAUDITED_MARKER, is_unaudited
+
+    never_ran = ValidationReport(
+        issues=[Issue(field="*", severity="unsupported",
+                      detail=f"{UNAUDITED_MARKER} (RuntimeError); record is unaudited.",
+                      suggested_confidence=0.0)],
+        verdict="revise")
+    real_finding = ValidationReport(
+        issues=[Issue(field="brand", severity="contradiction",
+                      detail="Input says Omron, record says Siemens.",
+                      suggested_confidence=0.0)],
+        verdict="revise")
+
+    assert is_unaudited(never_ran)
+    assert not is_unaudited(real_finding)
+    assert not is_unaudited(ValidationReport(issues=[], verdict="pass"))
+    # Both still retract confidence — failing safe is independent of the label.
+    for report in (never_ran, real_finding):
+        assert report.issues[0].suggested_confidence == 0.0
+
+
+def test_ui_escapes_model_output():
+    """Everything the UI renders — values, evidence, spec names — is LLM output.
+    A product description containing a script tag must render as text, not run."""
+    from src.app import render_field
+
+    hostile = "<script>alert('xss')</script>"
+    field = Sourced(value=hostile, source="input", evidence=hostile, confidence=0.9)
+    html = render_field(hostile, field)
+    assert "<script>" not in html
+    assert "&lt;script&gt;" in html
+
+
 def test_store_roundtrip_and_idempotency():
     with tempfile.TemporaryDirectory() as tmp:
         db = Path(tmp) / "t.db"
@@ -216,6 +253,21 @@ def test_permanent_errors_are_not_retried():
     assert not llm._is_permanent(Exception("429 RESOURCE_EXHAUSTED"))
     assert not llm._is_permanent(Exception("503 service unavailable"))
     assert not llm._is_permanent(ConnectionError("connection reset"))
+
+
+def test_retry_honours_server_stated_delay():
+    """The provider tells you how long to wait. Ignoring it and using a blind
+    4/8/16 backoff totals 28s — against a quota window that reopens at 42s,
+    every retry failed and recoverable errors were reported as dead records."""
+    # Real Gemini quota message, verbatim.
+    quota = Exception("429 RESOURCE_EXHAUSTED ... Please retry in 41.812865242s.")
+    assert abs(llm.retry_delay_from(quota, fallback=8) - 42.81) < 0.1
+    # Alternate spellings providers actually use.
+    assert abs(llm.retry_delay_from(Exception("retryDelay: '17s'"), 8) - 18.0) < 0.1
+    assert abs(llm.retry_delay_from(Exception("Retry-After: 30"), 8) - 31.0) < 0.1
+    # No stated delay -> caller's backoff, and never an unbounded sleep.
+    assert llm.retry_delay_from(Exception("boom"), fallback=8) == 8
+    assert llm.retry_delay_from(Exception("retry in 9999s"), 8) == llm.MAX_BACKOFF
 
 
 def test_rate_limit_detection():

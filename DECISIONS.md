@@ -286,3 +286,51 @@ returns the moment someone adds a model and copies the pattern from an old file.
 **Cost accepted:** Pydantic no longer rejects unexpected keys in LLM output — it
 ignores them. For model output that is arguably the better failure mode anyway,
 but it does mean a provider inventing a field goes unnoticed rather than raising.
+
+---
+
+## 014 — Verification harnesses are separate from the test suite (2026-08-12)
+
+**Context:** Two of the four judging criteria — AI validation, and accuracy —
+cannot be checked offline. They need real model calls, which cost quota and take
+minutes. But `test_pipeline.py` must stay free and instant or it stops being run.
+
+**Decision:** Three tiers, not one. `test_pipeline.py` (offline, free, ~1s),
+`src/probe.py` (~6 calls, does the validator object?), `src/golden.py` (~16
+calls, does enrichment hallucinate?).
+
+**Why:** Merging them produces a suite too slow and expensive to run on every
+edit, which means it stops being run at all. Splitting also matches how the
+questions differ: the unit tests guard logic that must never change, the probe
+and golden set measure behaviour that will drift as prompts are tuned.
+
+Both harnesses carry a design constraint learned from BUG-003: **an instrument
+needs a control and an explicit error state.** The probe has `clean-control`
+(must stay silent) and reports `NOT MEASURED` rather than a catch rate when the
+control didn't run. Both call `is_unaudited()` to exclude API failures from
+scoring instead of counting them as results.
+
+**Cost accepted:** Two more entry points to maintain, and the expensive tiers
+will be run rarely — so a prompt regression can survive for a while before
+anyone notices. Mitigated by making them cheap to invoke on one case
+(`python -m src.probe clean-control`, `python -m src.golden --quick 3`).
+
+---
+
+## 015 — The UI is read-only (2026-08-12)
+
+**Context:** Milestone 7. The obvious design has an "enrich this" button.
+
+**Decision:** `src/app.py` renders only what the pipeline already persisted. No
+model calls, no writes, no enqueue endpoint.
+
+**Why:** It makes the demo unbreakable by the thing most likely to break it. The
+free tier allows roughly 10 records/day/model; a UI that enriches on demand is
+one impatient click away from a 429 in front of judges. Read-only means the
+demo's failure modes are limited to "SQLite file missing". Enrichment stays in
+the CLI, where retries, pacing, and resumption already work and where a failure
+is visible in a terminal rather than a spinner.
+
+**Cost accepted:** No live "watch it enrich" moment in the browser — that has to
+be demoed from the CLI. Given the quota, running it live on stage was never the
+right plan anyway; pre-enriching and demoing the result is.

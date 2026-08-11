@@ -99,6 +99,17 @@ def enrich_one(record: RawRecord) -> Product:
     return product
 
 
+# Marker for "the audit never ran". Lives here so that anything reading a report
+# can distinguish a validator that found problems from one that never executed —
+# they are both non-empty issue lists, and conflating them turns an API failure
+# into a false "we caught something".
+UNAUDITED_MARKER = "Validation pass did not complete"
+
+
+def is_unaudited(report: ValidationReport) -> bool:
+    return any(i.field == "*" and UNAUDITED_MARKER in i.detail for i in report.issues)
+
+
 def validate_one(record: RawRecord, product: Product) -> ValidationReport:
     """Second pass. Fresh context, adversarial framing, no memory of writing it."""
     try:
@@ -119,7 +130,7 @@ def validate_one(record: RawRecord, product: Product) -> ValidationReport:
         return ValidationReport(
             issues=[Issue(
                 field="*", severity="unsupported",
-                detail=f"Validation pass did not complete ({type(exc).__name__}); record is unaudited.",
+                detail=f"{UNAUDITED_MARKER} ({type(exc).__name__}); record is unaudited.",
                 suggested_confidence=0.0,
             )],
             verdict="revise",

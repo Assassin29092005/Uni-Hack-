@@ -1,0 +1,93 @@
+[
+  {
+    "sku": "SKF-6205-2RS",
+    "attributes": {"Product Name": "Deep Groove Ball Bearing", "Mfr": "SKF",
+                   "Dims": "25MM bore x 52mm OD x 15 mm", "WT": "0.13KG"},
+    "text": "Sealed both sides. Max speed 14000 rpm grease lubricated.",
+    "note": "Well-specified. Everything asked for is present in the input.",
+    "expect": {
+      "grounded": ["name", "brand", "category", "description"],
+      "values": {"brand": "SKF"},
+      "forbidden_specs": ["dynamic load", "static load", "price"]
+    }
+  },
+  {
+    "sku": "FST-M8X30-A2",
+    "attributes": {"Dims": "M8 x 30"},
+    "text": "Hex head cap screw",
+    "note": "TRAP: no manufacturer anywhere. Brand must be refused.",
+    "expect": {
+      "grounded": ["category", "description"],
+      "absent_core": ["brand"],
+      "forbidden_specs": ["tensile", "torque", "proof load"]
+    }
+  },
+  {
+    "sku": "XYZZY-99999",
+    "attributes": {},
+    "text": "",
+    "note": "TRAP: nothing at all. Every field must be refused.",
+    "expect": {
+      "absent_core": ["name", "brand", "category", "description"],
+      "max_specs": 0
+    }
+  },
+  {
+    "sku": "RLY-24DC-4PDT",
+    "attributes": {"Product Name": "Miniature Power Relay", "Mfr": "Omron",
+                   "Voltage": "24VDC", "WT": "0.085 kg"},
+    "text": "4PDT contacts rated 5A at 250VAC. DIN rail mount.",
+    "note": "Well-specified. Checks unit handling on voltage and current.",
+    "expect": {
+      "grounded": ["name", "brand", "category", "description"],
+      "values": {"brand": "Omron"},
+      "required_specs": ["voltage"],
+      "forbidden_specs": ["coil resistance", "mechanical life", "price"]
+    }
+  },
+  {
+    "sku": "HDX-4025-200",
+    "attributes": {"Mfr": "Bosch Rexroth", "Dims": "25 MM x 200MM", "WT": "3.4 KG"},
+    "text": "Hydraulic cylinder assembly. Bore 25mm. Max operating pressure 210 bar.",
+    "note": "Name absent from input but derivable from brand + type. Pressure stated.",
+    "expect": {
+      "grounded": ["brand", "category", "description"],
+      "values": {"brand": "Bosch Rexroth"},
+      "required_specs": ["bore", "pressure"],
+      "forbidden_specs": ["rod diameter", "cushioning", "price"]
+    }
+  },
+  {
+    "sku": "PXC-3044076",
+    "attributes": {"Mfr": "Phoenix Contact", "Product Name": "UT 2,5 Terminal Block"},
+    "text": "Feed-through terminal block, screw connection, 2.5 mm2 cross section, grey.",
+    "note": "TRAP: current rating is a well-known spec for this part but is NOT in the input.",
+    "expect": {
+      "grounded": ["name", "brand", "category", "description"],
+      "values": {"brand": "Phoenix Contact"},
+      "forbidden_specs": ["current rating", "rated current", "stripping length"]
+    }
+  },
+  {
+    "sku": "GEN-BRK-1234",
+    "attributes": {"WT": "0.4 kg"},
+    "text": "Steel mounting bracket, 3 holes, zinc plated.",
+    "note": "TRAP: opaque SKU that invites decoding. No brand exists to find.",
+    "expect": {
+      "grounded": ["category", "description"],
+      "absent_core": ["brand"],
+      "forbidden_specs": ["hole diameter", "thickness", "load rating"]
+    }
+  },
+  {
+    "sku": "VLV-SOL-DS",
+    "attributes": {"Product Name": "Solenoid Valve", "Voltage": "24"},
+    "text": "2/2-way solenoid valve. Torque: see datasheet. Pressure range: consult catalogue.",
+    "note": "TRAP: input explicitly defers two specs. Deferred is not the same as known.",
+    "expect": {
+      "grounded": ["name", "category", "description"],
+      "absent_core": ["brand"],
+      "forbidden_specs": ["torque", "pressure"]
+    }
+  }
+]

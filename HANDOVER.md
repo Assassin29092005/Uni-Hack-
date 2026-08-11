@@ -3,7 +3,7 @@
 **Read this first, every session.** State of the project right now — not history.
 Rewritten (not appended) at the end of every chat.
 
-Last updated: 2026-08-12 01:30 IST
+Last updated: 2026-08-12 02:40 IST
 
 ---
 
@@ -21,7 +21,10 @@ claim of the project holds on a free model.
 Repo is on GitHub: `github.com/Assassin29092005/Uni-Hack-`, branch `main`,
 one commit (`21a765e`, the docs). The code below is **committed nowhere yet**.
 
-Build plan milestones (table in `CLAUDE.md`): **1–6 done, 7–8 not started.**
+**All 8 build-plan milestones are done and measured.** Headline numbers, all on
+the free tier: **0 hallucinations**, **28/28 abstention**, 96% grounding across 8
+hand-checked records; validator caught 5/5 planted faults with a clean control.
+Full write-up in `README.md` → Results.
 
 ```
 src/models.py      schema — Sourced/Spec/Product/Issue/ValidationReport
@@ -30,8 +33,13 @@ src/llm.py         provider layer: gemini (default) | ollama | anthropic
 src/enrich.py      prompts + enrich pass + validate pass + apply_report
 src/store.py       SQLite persistence + append-only audit trail
 src/pipeline.py    ingest, orchestration, CLI
-test_pipeline.py   15 checks, all passing
+src/app.py         web UI (catalog + provenance detail) and JSON API
+src/probe.py       adversarial validator check (planted errors + control)
+src/golden.py      accuracy harness vs data/golden.json
+test_pipeline.py   18 checks, all passing
+README.md          judge-facing: problem, design, measured results
 data/sample_products.csv   5 deliberately messy rows
+data/golden.json           8 hand-checked records, 5 of them abstention traps
 ```
 
 **The LLM provider is a config switch, not a code change** (DECISIONS 011).
@@ -78,28 +86,34 @@ Nothing mid-edit. The repo is in a consistent, runnable state.
 
 ## Next up
 
-1. **Commit the code.** Only the docs are on GitHub; `src/`, tests, and sample
-   data are untracked. This is the biggest risk in the repo right now.
-2. **Probe the validator.** It returned `0 issues` on all 5 records. That is
-   either a clean batch or a rubber stamp, and we cannot currently tell which —
-   see Broken below. Feed it a deliberately wrong record and check it objects.
-3. Build the golden set (~10 hand-checked products). Double duty: catching
-   prompt regressions, and proving free-tier quality is demo-grade.
-4. Milestone 7: minimal UI (table + detail panel with evidence and confidence).
-   `pipeline.show()` already produces exactly this view in text — port it.
-5. Milestone 8: scale numbers.
+Feature work is done. What remains is polish and preparation:
+
+1. **Commit and push.** User is handling this.
+2. **Pre-enrich the demo database before presenting.** The free tier is ~10
+   records/day/model; do not run a cold batch on stage. The UI is read-only and
+   makes zero API calls, so a pre-populated `catalog.db` demos perfectly with
+   no quota risk at all.
+3. **Re-run `python -m src.probe` when quota resets** to get all six cases in a
+   single clean run. The results in README are correct but were assembled across
+   two runs (planted errors from one, control verified separately after the
+   fixture was fixed).
+4. Optional: tune the one over-caution miss — `VLV-SOL-DS` declined to assign a
+   category despite the input naming it a "Solenoid Valve".
+5. Optional: widen `data/golden.json` beyond 8 records.
 
 ## Broken / known issues
 
-- **The validator has never actually objected to anything.** 0 issues across 5
-  records on its first outing. `apply_report` and the whole
-  contradiction-catching story are therefore only proven by unit test, never by
-  a real model finding a real problem. Until a deliberately-wrong record makes
-  it complain, treat "AI validation" as unverified — it is one of the four
-  judging criteria and the most likely thing to be quietly hollow.
-- **Code is uncommitted.** Only the docs are on GitHub.
-- Enrichment quality is proven on 5 records, all hand-picked by us. That is a
-  smoke test, not evidence.
+- **Free-tier quota is the real constraint: 20 requests/day/model**, measured
+  from the API's own 429. Two calls per record ≈ 10 records/day/model. Quota is
+  per-model, so `GEMINI_MODEL=gemini-2.5-flash-lite` gets a fresh bucket when
+  `gemini-2.5-flash` is spent — that is how the accuracy run completed at all.
+  **`gemini-2.5-flash` quota was exhausted as of 2026-08-12 02:30 IST.**
+- Accuracy numbers come from `gemini-2.5-flash-lite`, the weaker model. Treat
+  them as a floor. Worth re-running on `gemini-2.5-flash` when quota resets.
+- Probe results were assembled across two runs, not one clean sweep (see Next up).
+- Evidence base is 8 golden records + 5 sample records. Good enough to make real
+  claims, not enough to call it validated at catalog scale.
+- One over-caution miss (`VLV-SOL-DS` category). Failing in the safe direction.
 - Free tiers throttle per *minute*, so worker defaults are 2 and a batch of 10
   takes minutes. Plan the demo around a pre-enriched database rather than a cold
   run on stage — the store is resumable precisely so this works.

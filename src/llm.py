@@ -18,6 +18,7 @@ of the pipeline identical across them: we never regex a prose reply.
 """
 
 import os
+import re
 import time
 from functools import lru_cache
 from pathlib import Path
@@ -49,6 +50,8 @@ PROVIDER = os.getenv("LLM_PROVIDER", "gemini").lower()
 
 # Per-provider defaults, each overridable by env var.
 MODELS = {
+    # Free-tier quota is per model (measured: 20 requests/day/model), so when one
+    # is spent, `GEMINI_MODEL=gemini-2.5-flash-lite` gets a fresh bucket.
     "gemini": os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
     "ollama": os.getenv("OLLAMA_MODEL", "qwen2.5:7b"),
     "anthropic": os.getenv("ANTHROPIC_MODEL", "claude-opus-5"),
@@ -61,7 +64,27 @@ MODELS = {
 DEFAULT_WORKERS = {"gemini": 2, "ollama": 2, "anthropic": 6}
 
 MAX_RETRIES = 4
-BACKOFF_BASE = 4  # seconds; 4, 8, 16 — sized for per-minute quota windows
+BACKOFF_BASE = 8   # seconds; 8, 16, 32 — only used when the server names no delay
+MAX_BACKOFF = 90   # don't sleep longer than this on one attempt
+
+# Providers put the wait they actually want in the error text. Honour it: a
+# blind 4/8/16 backoff totals 28s, so against a quota window that reopens at 42s
+# every retry was guaranteed to fail and the record died on a recoverable error.
+# Covers the spellings seen in the wild: "Please retry in 41.8s",
+# "retryDelay: '17s'", "Retry-After: 30".
+_RETRY_AFTER = re.compile(
+    r"retry[\s_\-]*(?:after|in|delay)[\s:=\"']*(\d+(?:\.\d+)?)\s*s?",
+    re.IGNORECASE,
+)
+
+
+def retry_delay_from(exc: Exception, fallback: float) -> float:
+    """Seconds to wait, preferring the provider's own stated delay."""
+    match = _RETRY_AFTER.search(str(exc))
+    if match:
+        # +1s of slack: sleeping until the exact boundary tends to land early.
+        return min(float(match.group(1)) + 1, MAX_BACKOFF)
+    return min(fallback, MAX_BACKOFF)
 
 
 class ProviderError(RuntimeError):
@@ -259,9 +282,9 @@ def structured_call(system: str, user: str, schema: type[BaseModel]) -> BaseMode
                 raise RuntimeError(f"{PROVIDER} rejected the request: {exc}") from exc
             if attempt == MAX_RETRIES - 1:
                 break
-            delay = BACKOFF_BASE * (2 ** attempt)
+            delay = retry_delay_from(exc, BACKOFF_BASE * (2 ** attempt))
             reason = "rate limited" if _is_rate_limit(exc) else type(exc).__name__
-            print(f"    [{reason}; retry {attempt + 1}/{MAX_RETRIES - 1} in {delay}s]")
+            print(f"    [{reason}; retry {attempt + 1}/{MAX_RETRIES - 1} in {delay:.0f}s]")
             time.sleep(delay)
 
     raise RuntimeError(f"{PROVIDER} failed after {MAX_RETRIES} attempts: {last}") from last
