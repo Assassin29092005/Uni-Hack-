@@ -33,7 +33,12 @@ class Sourced(BaseModel):
     guess. A confident fabricated spec is worse than an admitted gap.
     """
 
-    model_config = {"extra": "forbid"}  # structured outputs require closed objects
+    # Deliberately NOT `extra: "forbid"`. That makes pydantic emit
+    # `additionalProperties: false`, which Anthropic requires but Gemini rejects
+    # outright with a 400. Providers that need the closed-object marker add it
+    # themselves in src/llm.py; keeping it out of the shared model is what lets
+    # one schema serve all three. Ignoring an unexpected extra key is also the
+    # more forgiving failure mode for model output.
 
     value: str | None = Field(description="The value, or null if it cannot be grounded.")
     unit: str | None = Field(default=None, description="Unit symbol, e.g. 'mm', 'V', 'kg'.")
@@ -79,7 +84,7 @@ class RawRecord(BaseModel):
 class Product(BaseModel):
     """The enriched, commerce-ready record. This is what Claude fills in."""
 
-    model_config = {"extra": "forbid"}
+    # See the note on Sourced: closed-object markers are added per provider.
 
     sku: str = Field(description="Copy the SKU through unchanged.")
     name: Sourced = Field(description="Commercial product name.")
@@ -127,7 +132,7 @@ class Product(BaseModel):
 class Issue(BaseModel):
     """One problem found by the validation pass."""
 
-    model_config = {"extra": "forbid"}
+    # See the note on Sourced: closed-object markers are added per provider.
 
     field: str = Field(description="Field name, or 'spec:<name>' for a spec.")
     severity: Literal["contradiction", "implausible", "unsupported", "unit"] = Field(
@@ -148,7 +153,7 @@ class ValidationReport(BaseModel):
     evidence, and asked only 'does this hold up?', actually finds things.
     """
 
-    model_config = {"extra": "forbid"}
+    # See the note on Sourced: closed-object markers are added per provider.
 
     issues: list[Issue] = Field(description="Empty list if the record holds up.")
     verdict: Literal["pass", "revise", "reject"] = Field(

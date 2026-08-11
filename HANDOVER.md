@@ -9,10 +9,14 @@ Last updated: 2026-08-12 01:30 IST
 
 ## Where things stand
 
-The pipeline is **built and self-tested, but has never made a real LLM call** —
-no provider credentials on this machine. Everything up to the model boundary is
-verified; everything past it is unproven. Treat "it works" as provisional until
-someone runs it with a key.
+**The pipeline runs end to end against the live Gemini free tier.** First real
+run: 5/5 records enriched, validated, scored, and persisted, `failed_records=0`.
+Milestones 1–6 are done and *demonstrated*, not just written.
+
+The abstention check passed, which was the make-or-break test: `XYZZY-99999`
+(the deliberately empty row) came back 0% complete, 0.00 confidence, all four
+core fields listed as gaps with per-field reasons — no invented specs. The core
+claim of the project holds on a free model.
 
 Repo is on GitHub: `github.com/Assassin29092005/Uni-Hack-`, branch `main`,
 one commit (`21a765e`, the docs). The code below is **committed nowhere yet**.
@@ -26,7 +30,7 @@ src/llm.py         provider layer: gemini (default) | ollama | anthropic
 src/enrich.py      prompts + enrich pass + validate pass + apply_report
 src/store.py       SQLite persistence + append-only audit trail
 src/pipeline.py    ingest, orchestration, CLI
-test_pipeline.py   13 checks, all passing
+test_pipeline.py   15 checks, all passing
 data/sample_products.csv   5 deliberately messy rows
 ```
 
@@ -37,10 +41,28 @@ path. All three take the same prompts and the same pydantic schemas.
 
 ## Done
 
-- `python test_pipeline.py` → **13 passed**. Covers normalization, ingest,
+- **Live run, Gemini free tier, 5/5 records:**
+
+  | SKU | verdict | complete | conf | gaps |
+  |---|---|---|---|---|
+  | HDX-4025-200 | pass | 100% | 0.94 | — |
+  | RLY-24DC-4PDT | pass | 100% | 0.93 | — |
+  | SKF-6205-2RS | pass | 100% | 0.97 | — |
+  | FST-M8X30-A2 | pass | 80% | 0.89 | brand |
+  | XYZZY-99999 | pass | 0% | 0.00 | name, brand, category, description |
+
+  Evidence quality is good: the cylinder's stroke was inferred from
+  `"25 MM x 200MM"` at 0.80 confidence *with the reasoning stated*, while its
+  bore — quoted verbatim from the input — came back at 1.00. That gradient is
+  exactly what the provenance model was for.
+- Resumability confirmed: a second run prints `Skipping 5 already-enriched
+  record(s)` and makes zero API calls.
+- BUG-001 found and fixed on the first live run (schema dialect clash). See
+  `BUG.md`; guarded by a test.
+- `python test_pipeline.py` → **15 passed**. Covers normalization, ingest,
   confidence gating, completeness scoring, validator semantics, store
   idempotency, the failed-record path, provider dispatch, rate-limit detection,
-  and that the schemas survive JSON-schema conversion.
+  per-provider schema dialects, and permanent-vs-retryable error classification.
 - CSV ingest verified end to end: 5 rows parsed, `MPN` auto-resolved to the SKU
   column, `Notes` folded into the free-text blob.
 - Error paths all print one clean message rather than a traceback or per-record
@@ -57,29 +79,27 @@ Nothing mid-edit. The repo is in a consistent, runnable state.
 ## Next up
 
 1. **Commit the code.** Only the docs are on GitHub; `src/`, tests, and sample
-   data are untracked.
-2. **Run it live.** Get a free key at `https://aistudio.google.com/apikey`, set
-   `GEMINI_API_KEY`, run `python -m src.pipeline data/sample_products.csv`.
-   Until this happens the prompts are untested and enrichment quality — on any
-   provider — is unknown.
-3. Inspect one record with `python -m src.pipeline --show HDX-4025-200` — that
-   provenance view is the demo's centrepiece.
-4. Check the abstention path specifically: `XYZZY-99999` in the sample CSV is
-   empty on purpose and **must** come back mostly null with reasons. If it comes
-   back confidently populated, the core claim of the project is broken and that
-   is the bug to fix before anything else.
-5. Build the golden set (~10 hand-checked products). It now does double duty:
-   catching prompt regressions, and answering whether the free model is good
-   enough to demo on.
-6. Milestone 7: minimal UI (table + detail panel with evidence and confidence).
-7. Milestone 8: scale numbers.
+   data are untracked. This is the biggest risk in the repo right now.
+2. **Probe the validator.** It returned `0 issues` on all 5 records. That is
+   either a clean batch or a rubber stamp, and we cannot currently tell which —
+   see Broken below. Feed it a deliberately wrong record and check it objects.
+3. Build the golden set (~10 hand-checked products). Double duty: catching
+   prompt regressions, and proving free-tier quality is demo-grade.
+4. Milestone 7: minimal UI (table + detail panel with evidence and confidence).
+   `pipeline.show()` already produces exactly this view in text — port it.
+5. Milestone 8: scale numbers.
 
 ## Broken / known issues
 
-- **No live run yet** (above). Biggest unknown by far, and it now covers a
-  second question: whether free-tier quality is sufficient. The prompts were
-  written against Claude's behavior and may need re-tuning per provider.
+- **The validator has never actually objected to anything.** 0 issues across 5
+  records on its first outing. `apply_report` and the whole
+  contradiction-catching story are therefore only proven by unit test, never by
+  a real model finding a real problem. Until a deliberately-wrong record makes
+  it complain, treat "AI validation" as unverified — it is one of the four
+  judging criteria and the most likely thing to be quietly hollow.
 - **Code is uncommitted.** Only the docs are on GitHub.
+- Enrichment quality is proven on 5 records, all hand-picked by us. That is a
+  smoke test, not evidence.
 - Free tiers throttle per *minute*, so worker defaults are 2 and a batch of 10
   takes minutes. Plan the demo around a pre-enriched database rather than a cold
   run on stage — the store is resumable precisely so this works.

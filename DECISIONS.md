@@ -258,3 +258,31 @@ direction.
 seconds. That is the actual shape of the free tier and the demo should be
 planned around it — enrich the catalog ahead of time and let the resumable
 store serve the demo, rather than running a cold batch on stage.
+
+---
+
+## 013 — The shared schema is permissive; providers add their own strictness (2026-08-12)
+
+**Context:** BUG-001. Anthropic's structured outputs *require*
+`additionalProperties: false` on every object; Gemini's `response_schema`
+*rejects* it with a 400. One pydantic model has to serve both.
+
+**Decision:** The shared models in `models.py` emit the **permissive** dialect —
+no `extra: "forbid"` anywhere. `llm._close_objects()` injects the closed-object
+marker, and only the Anthropic branch calls it.
+
+**Why:** Between the two, permissive is the correct shared base: adding
+constraints at the seam is easy, stripping them back out is fiddly and
+error-prone (you have to walk nested `$defs` and not break `anyOf`). It also
+keeps provider quirks in the one file whose job is provider quirks, instead of
+letting a vendor requirement dictate the shape of the core data model. Rejected:
+keeping `forbid` and stripping for Gemini — same effect, harder direction, and it
+would leave the data model shaped by whichever vendor was integrated first.
+
+Enforced by `test_schema_dialects_differ_per_provider`, whose failure message
+tells the next person not to re-add `extra: forbid`. Without that guard this bug
+returns the moment someone adds a model and copies the pattern from an old file.
+
+**Cost accepted:** Pydantic no longer rejects unexpected keys in LLM output — it
+ignores them. For model output that is arguably the better failure mode anyway,
+but it does mean a provider inventing a field goes unnoticed rather than raising.

@@ -17,12 +17,33 @@ All three support schema-constrained JSON output, which is what keeps the rest
 of the pipeline identical across them: we never regex a prose reply.
 """
 
-import json
 import os
 import time
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import BaseModel
+
+
+def _load_dotenv(path: Path = Path(".env")) -> None:
+    """Read KEY=value lines from .env into the environment.
+
+    Saves re-exporting a key in every new terminal, and keeps it off the command
+    line where it would land in shell history. Real environment variables always
+    win, so CI and one-off overrides still work. `.env` is gitignored — check
+    that it stays that way before putting a key in it.
+    """
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
+
+
+_load_dotenv()
 
 PROVIDER = os.getenv("LLM_PROVIDER", "gemini").lower()
 
@@ -54,6 +75,38 @@ def _is_rate_limit(exc: Exception) -> bool:
     text = f"{type(exc).__name__} {exc}".lower()
     return any(s in text for s in ("429", "rate limit", "rate_limit",
                                    "resource_exhausted", "quota", "overloaded", "529"))
+
+
+def _is_permanent(exc: Exception) -> bool:
+    """A malformed request or a bad key will fail identically forever.
+
+    Retrying those wastes the user's quota and — worse — buries the real error
+    under a wall of retry noise. Learned the hard way: a schema the API rejected
+    got retried 4x across 5 records before anyone could read the message.
+    """
+    text = f"{type(exc).__name__} {exc}".lower()
+    if _is_rate_limit(exc):
+        return False  # 429 looks like a 4xx but is the retryable one
+    return any(s in text for s in ("400", "invalid_argument", "invalid argument",
+                                   "401", "403", "404", "permission_denied",
+                                   "unauthenticated", "not found", "invalid api key"))
+
+
+def _close_objects(schema: dict) -> dict:
+    """Add `additionalProperties: false` to every object in a JSON schema.
+
+    Anthropic's structured outputs require it; Gemini returns a 400 if it is
+    present. So it lives here, applied per provider, rather than on the shared
+    pydantic models — one schema, two dialects.
+    """
+    if isinstance(schema, dict):
+        out = {k: _close_objects(v) for k, v in schema.items()}
+        if out.get("type") == "object" or "properties" in out:
+            out["additionalProperties"] = False
+        return out
+    if isinstance(schema, list):
+        return [_close_objects(v) for v in schema]
+    return schema
 
 
 # --- provider implementations -------------------------------------------------
@@ -132,7 +185,8 @@ def _call_anthropic(system: str, user: str, schema: type[BaseModel]) -> str:
         max_tokens=16000,
         system=system,
         messages=[{"role": "user", "content": user}],
-        output_config={"format": {"type": "json_schema", "schema": schema.model_json_schema()}},
+        output_config={"format": {"type": "json_schema",
+                                  "schema": _close_objects(schema.model_json_schema())}},
     )
     if getattr(response, "stop_reason", None) == "refusal":
         raise RuntimeError("Anthropic safety classifiers declined this request")
@@ -201,6 +255,8 @@ def structured_call(system: str, user: str, schema: type[BaseModel]) -> BaseMode
             raise  # setup problem — retrying will not fix a missing API key
         except Exception as exc:  # noqa: BLE001 — retry policy is deliberately broad
             last = exc
+            if _is_permanent(exc):
+                raise RuntimeError(f"{PROVIDER} rejected the request: {exc}") from exc
             if attempt == MAX_RETRIES - 1:
                 break
             delay = BACKOFF_BASE * (2 ** attempt)

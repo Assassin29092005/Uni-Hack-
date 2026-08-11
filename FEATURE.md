@@ -53,7 +53,12 @@ verified line numbers in `FLOW.md`.
   Anthropic path is retained. No file outside `llm.py` imports a vendor SDK.
 - Rate-limit retry + provider-aware worker defaults — free tiers throttle per
   minute, and without this the free option would not actually run
-- `test_pipeline.py` → **13 checks passing**
+- **Live run: 5/5 records enriched on the Gemini free tier, 0 failures.**
+  Abstention verified — the empty record returns 0% complete with per-field
+  reasons rather than invented specs. Resumability verified: second run skips
+  all 5 and makes no API calls.
+- BUG-001 (schema dialect clash) found on that first live run and fixed
+- `test_pipeline.py` → **15 checks passing**
 - CSV ingest verified against `data/sample_products.csv` (5 rows, `MPN`
   auto-detected as the SKU column)
 - Missing-credential and unknown-SKU paths → clean messages, no traceback
@@ -64,12 +69,14 @@ normalization, ingest, confidence gating, completeness scoring (including that
 padded specs don't inflate it), the one-way confidence rule, store idempotency,
 and the failed-record path.
 
-Not yet verified: enrichment *quality*, on any provider. The prompts have never
-been executed. The specific check that matters is that `XYZZY-99999` — the
-deliberately empty row in the sample CSV — comes back mostly null with reasons
-rather than confidently populated. Second open question now that the default is
-a free model: whether free-tier output is good enough, since the prompts were
-written against Claude's behavior.
+**Verified live** (Gemini free tier): 5/5 enriched, abstention correct,
+resumability correct, provenance legible. Confidence tracks evidence quality —
+verbatim input scored 1.00, a reasoned inference 0.80, with the reasoning stated.
+
+**Still not verified: that the validator ever objects.** It reported 0 issues on
+all 5 records. Either the enrichment was genuinely clean or the validator is
+rubber-stamping, and nothing in the run distinguishes those. This is the one
+judging criterion still resting on unit tests alone.
 
 **Left out:**
 - Model tiering (DECISIONS 007) — needs data on which records are hard

@@ -187,6 +187,37 @@ def test_provider_dispatch():
     assert llm.describe()
 
 
+def test_schema_dialects_differ_per_provider():
+    """BUG-001. Anthropic requires `additionalProperties: false`; Gemini returns
+    a 400 if it is present. The shared pydantic models must therefore emit it
+    NOWHERE, and the Anthropic branch must add it back. Putting `extra: forbid`
+    on a model would silently break every Gemini call."""
+    for schema in (Product, ValidationReport):
+        raw = schema.model_json_schema()
+        assert "additionalProperties" not in str(raw), (
+            f"{schema.__name__} emits additionalProperties — Gemini will 400. "
+            "Do not add `extra: \"forbid\"` to the shared models."
+        )
+        closed = llm._close_objects(raw)
+        assert closed["additionalProperties"] is False
+        # Nested objects need it too, not just the root.
+        assert str(closed).count("'additionalProperties': False") >= 2
+        # Closing must not mutate the original.
+        assert "additionalProperties" not in str(raw)
+
+
+def test_permanent_errors_are_not_retried():
+    """BUG-001 cost 4 retries x 5 records on an error that could never succeed,
+    burying the real message under retry noise."""
+    assert llm._is_permanent(Exception("400 INVALID_ARGUMENT Unknown name"))
+    assert llm._is_permanent(Exception("401 unauthenticated"))
+    assert llm._is_permanent(Exception("PermissionDenied: 403"))
+    # 429 reads like a 4xx but is the one that must be retried.
+    assert not llm._is_permanent(Exception("429 RESOURCE_EXHAUSTED"))
+    assert not llm._is_permanent(Exception("503 service unavailable"))
+    assert not llm._is_permanent(ConnectionError("connection reset"))
+
+
 def test_rate_limit_detection():
     """Free tiers throttle per minute; missing a 429 turns a retryable pause
     into a failed record, so this matcher is load-bearing."""
