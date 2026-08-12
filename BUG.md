@@ -24,7 +24,78 @@ re-running the same dead end, and that is most of this file's value.
 
 ---
 
-## BUG-004 — Part numbers get decoded from memory   [OPEN]
+## BUG-006 — Adding `?page=` killed every catalog request   [FIXED]
+
+**Found:** 2026-08-12, first end-to-end render after adding pagination. The full
+test suite was green at the time.
+
+**Symptom:** `GET /` raised `TypeError: 'int' object is not callable` from inside
+the f-string that builds the page.
+
+**Root cause:** FastAPI takes a route's query parameters from its signature, so
+the pager needed `def catalog(page: int = 1)`. `page` was already the name of the
+module-level HTML renderer — `def page(title, body)` — and the parameter shadowed
+it inside the one function that called it most.
+
+**Fix:** renamed the renderer to `render_page`. Renaming the *parameter* was the
+alternative and was rejected: it would have changed the public URL to something
+other than `?page=`, which is the obvious spelling for the query string.
+
+**Verified:** `test_ui_routes_render_against_a_real_database` calls the routes
+against a temp database. Worth stating plainly, because it is the lesson:
+**every existing test passed while the main page was dead.** The helpers were
+unit-tested, the route was not, and a route can only be tested by calling it.
+The first fix attempt missed the `page(sku, ...)` call site — the new test caught
+that too, one minute later.
+
+---
+
+## BUG-005 — Non-Latin attribute names deleted before the model saw them   [FIXED]
+
+**Found:** 2026-08-12, while checking whether canonicalising *output* spec names
+would break any golden expectation. The check was defensive; the bug it turned up
+was on the input side and had been live since the first commit.
+
+**Symptom:** `normalize_record` on our own Chinese golden record:
+
+```
+raw attributes : {'型号': 'MULT-CN-PT100-2', '货号': 'MULT-CN-IT-7731',
+                  'Categoria': 'Sensori di temperatura', '包装': '1 pz'}
+after normalize: {'categoria': 'Sensori di temperatura'}
+DROPPED        : 3 of 4
+```
+
+French fared better but not well: `débit` → `d bit`, `durée de vie` →
+`dur e de vie`, `vida útil` → `vida til`.
+
+**Root cause:** `normalize_key` cleaned with `re.sub(r"[^a-z0-9 ]+", " ", ...)`.
+That class keeps ASCII letters and deletes every other script, so a CJK name
+became the empty string — and `normalize_record` then dropped it, correctly, as
+a blank key. Two reasonable-looking lines, each doing its job, combining into
+silent data loss.
+
+The damage was worst where it was least visible: `MULT-CN-IT-7731` is a *golden
+record*. We were scoring the model's accuracy on a record whose input we had
+quietly deleted three quarters of, and counting the resulting gaps against it.
+
+**Fix:** `re.sub(r"[_\W]+", " ", ...)` with `re.UNICODE`. `\W` is unicode-aware,
+so non-Latin letters survive; `_` is listed separately because it is a word
+character but reads as a separator in supplier headers (`part_no` → `sku`).
+
+**Verified:** `test_normalize_key_survives_non_latin_scripts` — asserts 型号,
+débit, and `Réf. fournisseur` survive, that `part_no`/`Part No.` still resolve to
+`sku`, and that a three-attribute Chinese record keeps all three. The existing
+`test_normalize_keys` still passes unchanged, which is the point: the fix is
+strictly additive to the behaviour we already relied on.
+
+**Not yet known:** how much this moved the accuracy numbers. `MULT-CN-IT-7731`
+and `MULT-FR-ES-0442` were both scored under the broken canonicaliser, so their
+cached results measured a handicapped input. They need re-scoring, and the
+hallucination count may move in either direction.
+
+---
+
+## BUG-004 — Part numbers get decoded from memory   [OPEN — mitigated]
 
 **Found:** 2026-08-12, first run of the 32-record golden set. Invisible to the
 previous 8-record set, which scored 0 hallucinations.
@@ -73,6 +144,32 @@ thing not to do:
 MISL-6205-2RS-C3-77,MISL-VLV-12-150-316,DATA-FLUFF-0001 --force` and checking
 hallucinations drop to 0 **without** grounding falling — the risk is that a
 blunter instruction also suppresses legitimate inference.
+
+**Mitigation applied 2026-08-12 (deterministic, not a prompt change):**
+`checks.identifier_decoded_specs` catches the failure downstream of the model
+instead of trying to prevent it. A **spec** is flagged when three things hold at
+once: its source is `inference`, its value does not appear in the record, and its
+own evidence says it came from the identifier ("designation", "series", "part
+number", "conventionally", ...). Confidence drops to 0.4 — just under
+`CONFIDENCE_FLOOR` — so the value stops being published but stays visible with
+the reason attached.
+
+Why this and not the drafted prompt edit: the rule can be verified offline, right
+now, with no quota, and it cannot silently regress the way a prompt can. It also
+respects the same boundary the drafted wording draws — brand and family are left
+alone, because naming the likely manufacturer from a series prefix is legitimate
+inference and only the *properties* are off-limits.
+
+**Still open, and why the status is not FIXED:**
+- The model still produces these values; we now refuse to publish them. Suppressed
+  at the output is not the same as not generated.
+- The rule requires the evidence to admit where the value came from. A spec
+  inferred silently escapes it.
+- Effect on the golden numbers is **unmeasured**. It should lower hallucinations;
+  it may also lower grounding if it catches legitimate inference, and the golden
+  set is the only instrument that can tell those apart. Do not quote a new
+  accuracy figure until it has been re-run.
+- The model-vs-difficulty confound from the original run is untouched by this.
 
 ---
 

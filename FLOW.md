@@ -2,7 +2,7 @@
 
 How execution actually travels — file to file, function to function, in order.
 
-Last updated: 2026-08-12 01:20 IST
+Last updated: 2026-08-12 23:40 IST
 
 ---
 
@@ -11,22 +11,26 @@ Last updated: 2026-08-12 01:20 IST
 Entry point: `python -m src.pipeline <csv>` → [`pipeline.main`](src/pipeline.py:117)
 
 ```
-main()                              src/pipeline.py:117
- ├─ --show SKU ─► show()                           :97   read-only provenance view
- └─ run(csv, db, force, workers)                   :59
-      ├─ store.connect(db)          src/store.py:49      creates schema if absent
-      ├─ ingest_csv(csv)            src/pipeline.py:28
-      │    └─ normalize_record()    src/normalize.py:95  ─► list[RawRecord]
-      ├─ store.is_done(sku)         src/store.py:57      ◄── the resumability gate
+main()                              src/pipeline.py
+ ├─ --show SKU   ─► show()                              read-only provenance view
+ ├─ --export PATH► export_catalog() ─► store.export_all()   catalog -> JSON
+ ├─ --seed PATH  ─► seed_catalog()  ─► store.seed()         JSON -> catalog, 0 calls
+ └─ run(csv, db, force, workers)
+      ├─ store.connect(db)          src/store.py         creates schema if absent
+      ├─ ingest_csv(csv)            src/pipeline.py
+      │    └─ normalize_record()    src/normalize.py    ─► list[RawRecord]
+      ├─ store.is_done(sku)         src/store.py         ◄── the resumability gate
       ├─ process_batch(todo)        src/enrich.py
       │    ├─ llm.check_ready()     src/llm.py            fail fast on setup problems
       │    └─ ThreadPoolExecutor ─► process()                    per record:
       │         ├─ enrich_one()   ─► llm.structured_call()       model call 1
+      │         │    └─ normalize_specs()                        pure Python
       │         ├─ validate_one() ─► llm.structured_call()       model call 2
+      │         ├─ checks.merge() ─► run_checks()                pure Python
       │         └─ apply_report()                                pure Python
-      ├─ store.save(product, report)      src/store.py:68   products + 2 audit rows
-      │  └─ (on failure) store.save_error()           :96   audit only, no product row
-      └─ store.summary()                             :115
+      ├─ store.save(product, report)      src/store.py     products + 2 audit rows
+      │  └─ (on failure) store.save_error()               audit only, no product row
+      └─ store.summary()
 ```
 
 **Stage-to-code map** (the conceptual pipeline in `CLAUDE.md`, grounded):
@@ -34,11 +38,17 @@ main()                              src/pipeline.py:117
 | Stage | Where it lives | LLM? |
 |---|---|---|
 | ingest | `pipeline.ingest_csv` | no |
-| normalize | `normalize.normalize_record` | no |
+| normalize (in) | `normalize.normalize_record` | no |
 | enrich | `enrich.enrich_one` → `llm.structured_call` | **yes** |
+| normalize (out) | `normalize.normalize_specs`, inside `enrich_one` | no |
 | validate | `enrich.validate_one` → `llm.structured_call` | **yes** |
+| validate (rules) | `checks.run_checks` via `checks.merge` | no |
 | score | `models.Product.completeness` / `.mean_confidence` / `.gaps` (properties) | no |
 | persist | `store.save` | no |
+
+Normalization appears twice on purpose (DECISIONS 020): input is cleaned before
+the model sees it, and the model's own spec names and units are canonicalised
+before anything validates or stores them.
 
 ### The provider seam
 
@@ -51,6 +61,26 @@ No other file imports a vendor SDK. If you find yourself adding
 `import google.genai` or `import anthropic` outside `src/llm.py`, that's the
 seam leaking — put it behind `structured_call` instead. This is what makes
 switching providers a config change (DECISIONS 011).
+
+### Validation has two halves that must not merge
+
+`process()` calls the model validator, then `checks.merge`. They produce the same
+`Issue` type and flow through the same `apply_report`, but they are different
+instruments:
+
+- **`validate_one`** — one API call, adversarial framing, catches what needs
+  world knowledge (an implausible mass, circular evidence).
+- **`checks.run_checks`** — pure Python, no network, catches what is mechanically
+  checkable (provenance claimed as `input` for a value not in the input, a spec
+  decoded from the part number, a unit from the wrong family, two specs
+  contradicting each other). Runs **even when the API call failed**, so a record
+  whose validation died is degraded rather than unexamined.
+
+`checks.merge` returns a *new* report and never mutates the model's. That matters
+because `probe.py` measures the LLM validator alone: an instrument that silently
+received rule output would report our lookup tables as the model's judgement.
+`probe.py` therefore calls `validate_one` directly and bypasses the rules;
+`golden.py` calls `process()` and sees both, because it measures the system.
 
 ### Four invariants the flow depends on
 
@@ -91,9 +121,10 @@ is safe: the UI cannot be slowed or broken by a rate limit, because it makes no
 model calls at all.
 
 ```
-GET /                 catalog()        store.summary + products table
-GET /product/{sku}    product_detail() store.load -> render_field() per field
-GET /api/products     api_products()   commerce-ready JSON
+GET /?page=N          catalog()        store.summary + one page of products
+GET /product/{sku}    product_detail() store.load      -> render_field() per field
+                                       store.load_report -> render_validation()
+GET /api/products     api_products()   commerce-ready JSON, ?limit= &offset=
 GET /api/product/{sku}
 ```
 
@@ -101,6 +132,19 @@ GET /api/product/{sku}
 the publish threshold renders as a dashed box reading "no grounded value" with
 its reason, rather than being omitted. Everything it interpolates is model
 output, so it all goes through `esc()`.
+
+`render_validation()` is the other half of that story and was missing until
+2026-08-12: the reports were persisted from the first commit and nothing read
+them back, so what the validator *found* existed only in the database. It also
+distinguishes "no issues" from "never ran", for the same reason `is_unaudited`
+exists (BUG-003).
+
+Both list routes are paged. The catalog table was an unbounded `SELECT` that
+built every row into one HTML string, which is not a 10k-row story.
+
+The route parameter `page` is why the renderer is called `render_page` — see
+BUG-006, where the two names collided and every catalog request died while the
+whole test suite stayed green.
 
 ### Verification harnesses (both cost real API calls)
 
@@ -122,6 +166,10 @@ API failures as successful detections.
   (DECISIONS 008).
 - **Per-field resume**: `is_done` currently skips whole records, not individual
   ungrounded fields.
+- **Ingest beyond CSV.** `CLAUDE.md` scopes ingest as CSV/JSON/PDF/URL and only
+  `ingest_csv` exists. The consequence is visible in the schema: `Source` allows
+  `document` and `web`, and no code path can produce either, so two of the four
+  provenance kinds are currently unreachable.
 
 ---
 

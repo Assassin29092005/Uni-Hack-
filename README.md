@@ -54,11 +54,21 @@ python -m src.app             # http://127.0.0.1:8000
 
 Runs on a **free** API tier. No credit card, no paid account.
 
+No key to hand? An already-enriched catalog can be loaded with zero API calls:
+
+```bash
+python -m src.pipeline --seed data/demo_catalog.json
+```
+
+`--export` writes that file from a real run. The UI is read-only and makes no
+model calls, so a seeded catalog demos identically to a live one — which is the
+point, because a rate limit must never be able to break a demo.
+
 ## How it works
 
 ```
-ingest → normalize → enrich → validate → score → persist
-         (no LLM)    (LLM)     (LLM)     (no LLM)
+ingest → normalize → enrich → normalize → validate → score → persist
+         (no LLM)    (LLM)     (no LLM)    (LLM + rules)  (no LLM)
 ```
 
 Four decisions that shape everything else:
@@ -69,10 +79,27 @@ Sending `"MM" → "mm"` through an LLM costs latency and adds a hallucination
 surface for zero gain. It also makes the AI's contribution measurable: whatever
 appears beyond `normalize.py`'s output is what the model actually added.
 
+Normalization runs **twice**, and the second pass is the one people forget: the
+model names its own output attributes, so the same quantity comes back as
+"Operating Voltage" on one record and "voltage" on the next. Canonicalising only
+the input means deduped attributes hold for data you didn't generate. Exact
+duplicates merge; two specs that disagree about one attribute are deliberately
+*kept*, because that is a contradiction and resolving it by deleting one side is
+the behaviour this project exists to argue against.
+
 **Validation is a separate call, not a self-check.** One call that both writes
 and grades its own work produces a rubber stamp — it has already committed to
 the answer. A second call with fresh context, shown only the claim and its
 evidence, actually finds contradictions. Verified: see Results.
+
+**Validation has a free half.** `src/checks.py` applies deterministic rules
+alongside the model: a field claiming `source: input` for a value not in the
+input, a spec decoded from the part number, a numeric quantity carrying a unit
+from the wrong family, two specs contradicting each other. They cost nothing,
+behave identically every run, and — the part that matters on a free tier — still
+run when the validation API call fails, so a record whose audit died comes out
+degraded rather than unexamined. They are a floor, not a replacement: an 85 g
+relay reported as 45 kg is implausible only if you know what a relay is.
 
 **Scores are computed in Python, never requested from the model.**
 `completeness` and `mean_confidence` are `@property`, so they're absent from the
@@ -99,6 +126,16 @@ All numbers below are from live runs on Google's **free** tier. Model is named
 per run because it matters — the accuracy figures come from
 `gemini-2.5-flash-lite`, the *weaker* of the two models used, so treat them as a
 floor rather than a ceiling.
+
+> **Status of these numbers, stated plainly:** they were true when measured and
+> are now **stale**, for three reasons. The score cache they were aggregated from
+> is a local file that no longer exists; BUG-005 (since fixed) means the two
+> non-English records were scored on inputs the normalizer had silently deleted
+> most of; and the deterministic rules described above change what gets
+> published, so both hallucination and grounding will move. The set needs
+> re-running. A project whose entire argument is that unverified numbers are
+> worth less than admitted gaps does not get to make an exception for its own
+> scoreboard.
 
 ### Accuracy — `python -m src.golden`, 28 of 32 hand-checked records
 
@@ -186,9 +223,15 @@ For a real 100k-row catalog, in the order these would actually bite:
 
 What already works at scale: the run is **resumable** (kill it, restart, it skips
 finished SKUs and makes zero API calls for them), failures are **isolated** (one
-bad record is recorded in the audit trail and never enters the catalog), and
-rate limits are **survivable** (retries honour the provider's own stated delay —
-see BUG-002 for why that detail is not optional).
+bad record is recorded in the audit trail and never enters the catalog), rate
+limits are **survivable** (retries honour the provider's own stated delay — see
+BUG-002 for why that detail is not optional), and the read paths are **paged**
+(the catalog table and the JSON API were unbounded `SELECT`s that materialised
+the entire catalog per request — fine at 5 records, not at 10k).
+
+Ingest is currently **CSV only**, against a brief that scopes CSV/JSON/PDF/URL.
+The gap is visible in the schema rather than hidden: `source` allows `document`
+and `web`, and no code path can produce either yet.
 
 ## Verification
 
@@ -200,9 +243,15 @@ python -m src.probe           # adversarial validator check, ~6 API calls
 python -m src.golden          # accuracy vs hand-checked expectations, ~16 API calls
 ```
 
-- **`test_pipeline.py`** — the deterministic logic where a regression produces
-  *wrong data* rather than an error: unit normalization, confidence gating,
-  scoring, store idempotency, per-provider schema dialects, HTML escaping.
+- **`test_pipeline.py`** — 32 checks over the deterministic logic where a
+  regression produces *wrong data* rather than an error: unit normalization,
+  confidence gating, scoring, store idempotency, per-provider schema dialects,
+  HTML escaping, and every rule in `checks.py` **with a control case**. One test
+  asserts the rules stay silent on the exact fixture the LLM validator is
+  required to call clean — if the two instruments disagree, one is wrong and the
+  suite says so. Another calls the web routes against a real database, after a
+  query parameter shadowed a renderer and killed the catalog page while all 19
+  tests of the day stayed green (BUG-006).
 - **`src/probe.py`** — plants known errors (a contradicted voltage, circular
   evidence, an implausible mass, a wrong unit, an overconfident guess) and checks
   the validator catches each. Includes a **control**: a clean record that must
@@ -230,10 +279,11 @@ python -m src.golden          # accuracy vs hand-checked expectations, ~16 API c
 | Path | Role |
 |---|---|
 | `src/models.py` | Schema. `Sourced` makes provenance structural |
-| `src/normalize.py` | Deterministic cleanup, zero model calls |
+| `src/normalize.py` | Deterministic cleanup both directions, zero model calls |
 | `src/llm.py` | Provider seam — the only file importing a vendor SDK |
 | `src/enrich.py` | Prompts, enrich pass, validate pass |
-| `src/store.py` | SQLite + append-only audit trail |
+| `src/checks.py` | Deterministic validation rules — the free half of the audit |
+| `src/store.py` | SQLite + append-only audit trail + export/seed |
 | `src/pipeline.py` | Ingest, orchestration, CLI |
 | `src/app.py` | Web UI + JSON API |
 | `src/probe.py` | Adversarial validator check |

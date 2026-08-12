@@ -23,6 +23,67 @@ The `Left out` line matters most under a deadline — it separates "not built ye
 
 ---
 
+## FEAT-004 — Deterministic validation, output normalization, demo safety   [DONE]
+
+**Scoped:** Close the gaps between what `CLAUDE.md` claims the system does and
+what the code actually did, restricting the work to things verifiable **without
+any API quota** — there is no key on this machine at all. Explicitly not in
+scope: applying the BUG-004 prompt fix, re-scoring the golden set, PDF/JSON/URL
+ingest.
+
+**Why:** An audit of the repo against the build plan found all 8 milestones
+genuinely shipped, and four claims that were not backed by code:
+1. "deduped attributes, normalized units" — normalization ran on input only.
+2. "AI validation" — the reports were persisted and **never read back**, so the
+   findings appeared nowhere a judge could see them.
+3. "scalable catalog engine" — the catalog page and the JSON API were unbounded
+   `SELECT`s that materialised the whole table per request.
+4. The demo could not be shown at all: `catalog.db` is gitignored and absent, so
+   the UI rendered "No products yet."
+
+**Design:**
+- `src/checks.py` — four deterministic rules producing the same `Issue` type the
+  model produces, merged by `checks.merge` inside `process()` and running even
+  when the validation call failed (DECISIONS 019).
+- `normalize.normalize_specs` — canonicalises model-produced spec names, units,
+  and values; merges exact duplicates and deliberately keeps contradictions for
+  the rules to report (DECISIONS 020).
+- `app.render_validation` — the findings panel, plus `?page=` on both list routes.
+- `--export` / `--seed` — enrich once where there is quota, demo anywhere
+  (DECISIONS 021).
+
+**Touches:** `src/checks.py` (new), `src/normalize.py`, `src/enrich.py`,
+`src/store.py`, `src/pipeline.py`, `src/app.py`, `test_pipeline.py`.
+
+**Verified:** 32 tests pass, up from 19. Every rule has a **control** case, and
+one test asserts the rules stay silent on the exact fixture `probe.py` requires
+the LLM validator to call clean — if the two instruments ever disagree, that test
+fails. Beyond unit tests, the whole pipeline was run end to end against a stubbed
+provider (real ingest, normalize, store, export, seed, and HTML render; canned
+model replies) with faults planted in the canned output: all four rules fired,
+duplicate spec spellings collapsed to one, resumability made zero further calls,
+and the seeded database rendered both pages with no API key present.
+
+**Two bugs found, both by that end-to-end run rather than by unit tests:**
+- **BUG-005** — `normalize_key` deleted every non-Latin character, so three of
+  four attributes on our own Chinese golden record were dropped before
+  enrichment. Live since the first commit.
+- **BUG-006** — the `?page=` route parameter shadowed the `page()` renderer;
+  every catalog request raised `TypeError` while all 19 tests stayed green.
+
+**Left out:**
+- **Effect on accuracy is unmeasured.** The rules should lower hallucinations and
+  may also lower grounding. No golden re-run is possible without a key, and no
+  new accuracy figure should be quoted until there is one.
+- BUG-004's prompt fix still not applied; the rules mitigate the output, they do
+  not stop the model generating it.
+- `data/demo_catalog.json` does not exist yet — the mechanism is built and the
+  file must come from a real run, not from a hand-written fixture (DECISIONS 021).
+- Ingest is still CSV-only, so `source: document` and `source: web` remain
+  unreachable.
+
+---
+
 ## FEAT-003 — Golden set widened 8 → 32 records   [DONE, 28/32 scored]
 
 **Scoped:** Move the accuracy claim from "promising signal on 8 records" to

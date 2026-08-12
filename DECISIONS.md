@@ -414,3 +414,101 @@ rather than hiding it. It bit immediately — all four hallucinating records lan
 on one model, leaving "hard traps" and "weaker model" confounded (BUG-004). When
 quota allows, prefer scoring the whole set on one model and treat rotation as
 the fallback it is.
+
+---
+
+## 019 — Deterministic rules validate alongside the LLM, not instead of it (2026-08-12)
+
+**Context:** Validation was one model call. That made the project's second
+judging criterion entirely dependent on quota, and on a free tier "the audit ran"
+is not something you can assume — `validate_one` already had a fallback for the
+call simply failing. A record whose validation died got a retracted confidence
+and no findings at all.
+
+Separately, three of the failures we can actually observe are mechanical:
+BUG-004's decoded part numbers, a unit from the wrong family, and two specs
+naming one attribute with different values. None of those need a language model
+to notice.
+
+**Decision:** `src/checks.py` — four deterministic rules producing the same
+`Issue` type the model produces, merged into the report by `checks.merge` inside
+`process()`. It runs unconditionally, including when the validation call failed.
+
+The rules are: provenance claimed as `input` for a value not in the input;
+a spec decoded from the identifier (BUG-004); a numeric quantity with a
+wrong-family or missing unit; two specs that canonicalise to one name and
+disagree.
+
+**Why not replace the LLM validator:** the probe shows it catching things no
+table can — an 85 g relay reported as 45 kg is implausible only if you know what
+a relay is, and "it is a Siemens relay because it is a Siemens relay" is circular
+only if you can read. Deterministic rules are a floor, not a ceiling.
+
+**Why not fold them into the prompt instead:** a prompt cannot be tested offline
+and can regress silently. These rules are unit-tested, run in ~0 ms, cost
+nothing, and behave identically every time.
+
+**Rejected:** running the rules *before* the model and skipping the call on a
+clean record. It would save quota and would also mean the cleanest records — the
+ones a judge is most likely to inspect — were the ones we never audited properly.
+
+**Cost accepted:** the rules can only be as good as their tables, and a rule that
+fires wrongly damages good data. Mitigated by giving every rule a control case in
+the test suite, including one that asserts the rules stay silent on the exact
+fixture `probe.py` requires the LLM validator to call clean. If those two
+instruments ever disagree, one of them is wrong and the test says so.
+
+---
+
+## 020 — Normalization runs on model output, not only on model input (2026-08-12)
+
+**Context:** `normalize.py` cleaned records on the way in and nothing on the way
+out. But the model names its own attributes, so the catalog stored whatever it
+called them that minute — "Operating Voltage", "voltage", "VOLTAGE" — with units
+spelled "VDC", "volts", or "V DC". "Normalized units, deduped attributes" is a
+judging criterion, and it held only for the data we did not generate.
+
+**Decision:** `normalize_specs` runs in `enrich_one` immediately after the model
+replies and before validation, so both validators see one consistent spelling.
+
+**The interesting sub-decision:** only *exact* duplicates are merged. Two specs
+sharing a canonical name but disagreeing about the value are both kept, and
+`checks.contradictory_specs` reports them. Merging them would have meant picking
+a winner on the strength of a self-reported confidence score, and resolving a
+contradiction by deleting one side of it is precisely the behaviour this project
+exists to argue against.
+
+That in turn forced a fix in `apply_report`, which mapped field name → one field
+and would have flagged the contradiction while leaving the other claim published
+at full confidence. It now maps name → every field answering to it.
+
+**Cost accepted:** canonicalisation is only as good as the alias table, and
+running it on model output means a bad alias now corrupts generated data as well
+as ingested data. The tables are small and tested; the exposure is understood.
+
+---
+
+## 021 — The demo seeds from an exported catalog, never from a live run (2026-08-12)
+
+**Context:** The UI has been read-only since DECISIONS 015 precisely so a rate
+limit cannot break the demo. But it renders `catalog.db`, and `catalog.db` is
+gitignored — so on any machine that has not personally run the pipeline, the
+"read-only, unbreakable" UI shows an empty table. That is exactly the machine a
+demo happens on.
+
+**Decision:** `--export` dumps the enriched catalog to JSON; `--seed` loads it
+back, making zero model calls. Enrich once where there is quota, export, commit
+the file, seed anywhere.
+
+**Why not commit `catalog.db`:** a binary blob nobody can diff or review, and it
+would go stale invisibly. JSON shows up in a pull request.
+
+**Why not generate a demo fixture by hand:** it was considered and rejected
+outright. Hand-written records presented as model output are fabricated evidence,
+in a project whose entire claim is that every value is traceable to where it
+actually came from. The seed file must come from a real run.
+
+**Why seeding preserves the original timestamps:** an imported record keeps its
+real `enriched_at` and gains one extra audit row saying it arrived by import.
+Stamping imported data as freshly enriched would make the audit trail lie about
+when — and an audit trail that lies about when is barely better than none.
