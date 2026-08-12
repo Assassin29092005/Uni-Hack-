@@ -11,15 +11,42 @@ demo. Prompt quality is checked against the golden set, not here.
 import tempfile
 from pathlib import Path
 
-from src import llm, store
+from src import checks, llm, store
 from src.enrich import apply_report
-from src.models import CONFIDENCE_FLOOR, Issue, Product, Sourced, Spec, ValidationReport
-from src.normalize import normalize_key, normalize_record, normalize_value
+from src.models import CONFIDENCE_FLOOR, Issue, Product, RawRecord, Sourced, Spec, ValidationReport
+from src.normalize import normalize_key, normalize_record, normalize_specs, normalize_value
 from src.pipeline import ingest_csv
 
 
 def sourced(value, confidence=0.9, unit=None) -> Sourced:
     return Sourced(value=value, unit=unit, source="input", evidence="test", confidence=confidence)
+
+
+def spec(name, value, unit=None, confidence=0.9, source="input", evidence="test") -> Spec:
+    return Spec(name=name, value=value, unit=unit, source=source,
+                evidence=evidence, confidence=confidence)
+
+
+# The record the README's flagship example comes from. Used as the control for
+# the deterministic rules: everything the model legitimately derives from it must
+# pass through them silently.
+CYLINDER = RawRecord(
+    sku="HDX-4025-200",
+    attributes={"brand": "Bosch Rexroth", "dimensions": "25 MM x 200MM", "weight": "3.4 kg"},
+    text="Hydraulic cylinder assembly. Bore 25mm. Max operating pressure 210 bar.",
+)
+
+
+def cylinder_product(**overrides) -> Product:
+    base = dict(
+        sku="HDX-4025-200",
+        name=sourced("Bosch Rexroth HDX-4025-200 Hydraulic Cylinder"),
+        brand=sourced("Bosch Rexroth"),
+        category=sourced("Hydraulic Cylinder"),
+        description=sourced("A hydraulic cylinder assembly with a 25 mm bore."),
+        specs=[spec("bore", "25", "mm")],
+    )
+    return Product(**{**base, **overrides})
 
 
 def demo_product(**overrides) -> Product:
@@ -348,6 +375,246 @@ def test_failed_record_is_absent_but_audited():
         store.save_error(conn, "BAD-1", "RuntimeError: boom")
         assert not store.is_done(conn, "BAD-1"), "a failed record must not enter the catalog"
         assert store.summary(conn)["failed_records"] == 1
+        conn.close()
+
+
+def test_normalize_key_survives_non_latin_scripts():
+    """BUG-005. The ASCII-only character class deleted every non-Latin letter,
+    so a Chinese attribute name became the empty string and `normalize_record`
+    dropped it as a blank key — three of four attributes vanished from our own
+    Chinese golden record before the model ever saw them."""
+    assert normalize_key("型号") == "型号"
+    assert normalize_key("débit") == "débit"
+    assert normalize_key("Réf. fournisseur") == "réf fournisseur"
+    # Separators must still separate, including the underscore `\W` would keep.
+    assert normalize_key("part_no") == "sku"
+    assert normalize_key("Part No.") == "sku"
+    assert normalize_key("Artikel-Nr.") == "artikel nr"
+
+    record = normalize_record("MULT-CN-IT-7731",
+                              {"型号": "PT100-2", "货号": "7731", "包装": "1 pz"})
+    assert len(record.attributes) == 3, "non-Latin attribute names must reach the model"
+    assert record.attributes["型号"] == "PT100-2"
+
+
+def test_normalize_specs_canonicalises_and_dedupes():
+    """The model names its own output attributes, so the same quantity comes
+    back spelled three ways. Input has always been normalized; output was not."""
+    out = normalize_specs([
+        spec("Operating Voltage", "24", "VDC"),
+        spec("voltage", "24", "vdc", confidence=0.95),   # same thing, louder
+        spec("WT", "3.4", "KG"),
+    ])
+    names = [s.name for s in out]
+    assert names == ["operating voltage", "weight"], "aliases and casing collapse"
+    assert out[0].unit == "V DC" and out[1].unit == "kg", "units canonicalised"
+    assert out[0].confidence == 0.95, "the higher-confidence copy of a duplicate wins"
+
+
+def test_normalize_specs_keeps_contradictions_for_the_validator():
+    """Two specs that share a name and disagree are a contradiction, not a
+    duplicate. Merging them would resolve the more interesting failure by
+    picking a winner on the strength of a self-reported confidence score."""
+    out = normalize_specs([spec("Voltage", "24", "V"), spec("voltage", "240", "V")])
+    assert len(out) == 2, "conflicting claims both survive normalization"
+    assert checks.contradictory_specs(Product(
+        sku="X", name=sourced("n"), brand=sourced("b"), category=sourced("c"),
+        description=sourced("d"), specs=out)), "and the check reports them"
+
+
+def test_checks_flag_provenance_the_input_does_not_support():
+    """A field claiming `source: input` whose value is not in the input is
+    mechanically wrong, whatever the value's merits."""
+    fake = cylinder_product(brand=sourced("Allen-Bradley"))
+    issues = checks.unsupported_input_claims(CYLINDER, fake)
+    assert [i.field for i in issues] == ["brand"]
+    assert issues[0].suggested_confidence < CONFIDENCE_FLOOR, "stops being published"
+
+    # CONTROL: a name assembled entirely from tokens the record contains is the
+    # normal, correct case and must stay silent, or the rule flags good work.
+    assert not checks.unsupported_input_claims(CYLINDER, cylinder_product())
+
+
+def test_checks_flag_specs_decoded_from_the_part_number():
+    """BUG-004: the model recognises a numbering scheme and reports what it
+    conventionally means as though the record had said so."""
+    decoded = cylinder_product(specs=[
+        spec("width", "15", "mm", source="inference",
+             evidence="The 6205-2RS designation indicates a 15 mm width."),
+    ])
+    issues = checks.identifier_decoded_specs(CYLINDER, decoded)
+    assert len(issues) == 1 and issues[0].field == "spec:width"
+    assert issues[0].suggested_confidence < CONFIDENCE_FLOOR
+
+    # CONTROL: the README's flagship inference. The value IS in the record
+    # ("25 MM x 200MM"), so joining it up is legitimate work, not decoding —
+    # even though the evidence uses the word "conventionally".
+    legitimate = cylinder_product(specs=[
+        spec("stroke", "200", "mm", source="inference",
+             evidence="Bore is stated as 25mm, so the second dimension "
+                      "conventionally represents the stroke."),
+    ])
+    assert not checks.identifier_decoded_specs(CYLINDER, legitimate)
+
+
+def test_checks_flag_unit_family_mismatches():
+    wrong = cylinder_product(specs=[spec("current rating", "5", "mm")])
+    assert [i.severity for i in checks.unit_problems(wrong)] == ["unit"]
+
+    missing = cylinder_product(specs=[spec("weight", "3.4")])
+    assert "no unit" in checks.unit_problems(missing)[0].detail
+
+    # CONTROLS: values that are complete without a unit, and correct units.
+    # A rule that demands units for "IP67" or counts trains everyone to ignore it.
+    fine = cylinder_product(specs=[
+        spec("operating voltage", "24", "V DC"),
+        spec("number of poles", "4"),
+        spec("ingress protection", "IP67"),
+        spec("bore", "25", "mm"),
+    ])
+    assert not checks.unit_problems(fine)
+
+
+def test_checks_stay_silent_on_the_probe_control_record():
+    """The strongest available control: the fixture the LLM validator is
+    required to find clean must also survive every deterministic rule. If these
+    disagree, one of the two instruments is wrong and the probe's control case
+    stops meaning what it claims."""
+    from src.probe import _cases
+
+    name, _, _, raw, product, expect_issues = next(
+        c for c in _cases() if c[0] == "clean-control")
+    assert expect_issues is False, "fixture drift: clean-control must expect silence"
+    assert not checks.run_checks(raw, product), (
+        "deterministic rules flag the record the LLM validator must call clean")
+
+
+def test_checks_merge_is_additive_and_never_silently_upgrades():
+    clean_report = ValidationReport(issues=[], verdict="pass")
+    dirty = cylinder_product(brand=sourced("Allen-Bradley"))
+
+    merged = checks.merge(CYLINDER, dirty, clean_report)
+    assert len(merged.issues) == 1, "rule findings join the model's findings"
+    assert merged.verdict == "revise", "a rule disagreeing with `pass` downgrades it"
+    assert clean_report.issues == [] and clean_report.verdict == "pass", (
+        "the model's own report must not be mutated — probe.py measures it alone")
+
+    # No findings -> the report passes through untouched, not rebuilt.
+    assert checks.merge(CYLINDER, cylinder_product(), clean_report) is clean_report
+
+
+def test_checks_still_run_when_validation_never_happened():
+    """The free half of the audit is exactly what a record needs when the API
+    call died. It must add findings without disguising the API failure."""
+    from src.enrich import UNAUDITED_MARKER, is_unaudited
+
+    unaudited = ValidationReport(
+        issues=[Issue(field="*", severity="unsupported",
+                      detail=f"{UNAUDITED_MARKER} (RuntimeError); record is unaudited.",
+                      suggested_confidence=0.0)],
+        verdict="revise")
+    merged = checks.merge(CYLINDER, cylinder_product(brand=sourced("Allen-Bradley")),
+                          unaudited)
+    assert len(merged.issues) == 2
+    assert is_unaudited(merged), "adding findings must not hide that the audit failed"
+
+
+def test_apply_report_reaches_every_spec_sharing_a_name():
+    """Contradictory specs canonicalise to one name. A lookup that kept only the
+    last would flag the contradiction while leaving the other claim published."""
+    product = cylinder_product(specs=[
+        spec("operating voltage", "24", "V"), spec("operating voltage", "240", "V")])
+    apply_report(product, ValidationReport(
+        issues=[Issue(field="spec:operating voltage", severity="contradiction",
+                      detail="two values", suggested_confidence=0.1)],
+        verdict="revise"))
+    assert [s.confidence for s in product.specs] == [0.1, 0.1]
+
+
+def test_page_window_clamps_instead_of_erroring():
+    """A hand-typed ?page=999 during a demo shows the last page, not a stack
+    trace. Pure arithmetic, so it is testable without a database or a client."""
+    from src.app import page_window
+
+    assert page_window(0, 1) == (0, 1, 1), "an empty catalog still has one page"
+    assert page_window(250, 3, per_page=100) == (200, 3, 3)
+    assert page_window(250, 999, per_page=100) == (200, 3, 3)
+    assert page_window(250, 0, per_page=100) == (0, 1, 3)
+
+
+def test_ui_routes_render_against_a_real_database():
+    """The routes were only ever smoke-tested by hand, and a unit test of their
+    helpers cannot catch a route that doesn't run at all: adding the `?page=`
+    query parameter shadowed the module-level `page()` renderer inside
+    `catalog()`, so every catalog request raised `'int' object is not callable`
+    while every test still passed. Call the routes."""
+    from src import app as webapp
+
+    with tempfile.TemporaryDirectory() as tmp:
+        db = Path(tmp) / "ui.db"
+        conn = store.connect(db)
+        store.save(conn, cylinder_product(), ValidationReport(
+            issues=[Issue(field="brand", severity="unsupported",
+                          detail="not in the record", suggested_confidence=0.3)],
+            verdict="revise"))
+        conn.close()
+
+        original = store.DB_PATH
+        store.DB_PATH = db  # resolved per call, not frozen as a default argument
+        try:
+            listing = webapp.catalog().body.decode()
+            assert "HDX-4025-200" in listing
+            assert webapp.catalog(page=999).body.decode(), "out-of-range page must clamp"
+
+            detail = webapp.product_detail("HDX-4025-200").body.decode()
+            assert "Validation" in detail, "the findings panel must render"
+            assert "not in the record" in detail, "the validator's actual finding"
+            assert "confidence capped at 0.30" in detail
+
+            import json as _json
+            payload = _json.loads(webapp.api_products().body.decode())
+            assert payload["total"] == 1 and len(payload["products"]) == 1
+            assert payload["products"][0]["brand"]["evidence"], "provenance reaches the API"
+            assert webapp.product_detail("NOPE").status_code == 200, "unknown SKU is a page"
+        finally:
+            store.DB_PATH = original
+
+
+def test_export_seed_roundtrip_makes_no_model_calls():
+    """The demo-safety path: enrich once where there is quota, export, and seed
+    it on a machine with no API key at all."""
+    with tempfile.TemporaryDirectory() as tmp:
+        source_db, target_db = Path(tmp) / "a.db", Path(tmp) / "b.db"
+        report = ValidationReport(
+            issues=[Issue(field="brand", severity="unsupported",
+                          detail="not in the record", suggested_confidence=0.3)],
+            verdict="revise")
+
+        conn = store.connect(source_db)
+        store.save(conn, cylinder_product(), report, at="2026-08-11T09:00:00+00:00")
+        exported = store.export_all(conn)
+        conn.close()
+
+        assert len(exported) == 1 and exported[0]["enriched_at"] == "2026-08-11T09:00:00+00:00"
+
+        conn = store.connect(target_db)
+        assert store.seed(conn, exported, source="demo.json") == 1
+        loaded = store.load(conn, "HDX-4025-200")
+        assert loaded is not None and loaded.brand.value == "Bosch Rexroth"
+        assert loaded.specs[0].evidence == "test", "provenance survives the export"
+
+        # The findings survive the round trip, or the UI panel would go blank.
+        restored = store.load_report(conn, "HDX-4025-200")
+        assert restored is not None and restored.issues[0].detail == "not in the record"
+
+        # The trail says both when it was enriched and when this DB imported it.
+        stages = {r["stage"] for r in
+                  conn.execute("SELECT stage FROM audit WHERE sku=?", ("HDX-4025-200",))}
+        assert stages == {"enrich", "validate", "seed"}
+        when = conn.execute(
+            "SELECT created_at FROM audit WHERE sku=? AND stage='enrich'",
+            ("HDX-4025-200",)).fetchone()["created_at"]
+        assert when == "2026-08-11T09:00:00+00:00", "imported data must not claim to be fresh"
         conn.close()
 
 
