@@ -18,8 +18,9 @@ whether we run on Gemini's free tier, a local Ollama model, or Claude.
 
 from concurrent.futures import ThreadPoolExecutor
 
-from . import llm
-from .models import Issue, Product, RawRecord, ValidationReport
+from . import checks, llm
+from .models import Issue, Product, RawRecord, Sourced, ValidationReport
+from .normalize import normalize_specs
 
 ENRICH_SYSTEM = """You turn sparse industrial product records into structured, \
 commerce-ready data.
@@ -96,6 +97,12 @@ def enrich_one(record: RawRecord) -> Product:
         Product,
     )
     product.sku = record.sku  # the SKU is ours, not the model's, even if it echoes it back
+    # The model names its own attributes, so canonicalise them the same way we
+    # canonicalise input attributes. Runs BEFORE validation so the deterministic
+    # rules and the LLM both audit one consistent spelling of each spec — and so
+    # `checks.contradictory_specs` can see that "Voltage: 24" and "voltage: 240"
+    # are two claims about one attribute rather than two unrelated specs.
+    product.specs = normalize_specs(product.specs)
     return product
 
 
@@ -145,24 +152,41 @@ def apply_report(product: Product, report: ValidationReport) -> Product:
     Confidence only ever moves *down* here. A validator that could raise
     confidence would let a second opinion launder a bad first one.
     """
-    named = {"name": product.name, "brand": product.brand,
-             "category": product.category, "description": product.description}
-    named.update({f"spec:{s.name}": s for s in product.specs})
+    # Field name -> every field answering to it. A LIST, not a single field: two
+    # specs can legitimately share a canonical name when they contradict each
+    # other, and a dict that kept only the last one would flag a contradiction
+    # while quietly leaving the other claim published at full confidence.
+    named: dict[str, list[Sourced]] = {
+        "name": [product.name], "brand": [product.brand],
+        "category": [product.category], "description": [product.description],
+    }
+    for spec in product.specs:
+        named.setdefault(f"spec:{spec.name}", []).append(spec)
 
     for issue in report.issues:
-        targets = named.values() if issue.field == "*" else [named.get(issue.field)]
+        if issue.field == "*":
+            targets = [field for group in named.values() for field in group]
+        else:
+            # A validator naming a field that doesn't exist is ignored, not fatal.
+            targets = named.get(issue.field, [])
         for field in targets:
-            if field is None:
-                continue  # validator named a field that doesn't exist; ignore rather than crash
             field.confidence = min(field.confidence, max(0.0, issue.suggested_confidence))
             field.evidence = f"{field.evidence} [flagged: {issue.detail}]"
     return product
 
 
 def process(record: RawRecord) -> tuple[Product, ValidationReport]:
-    """Full per-record path: enrich -> validate -> apply. One record, two calls."""
+    """Full per-record path: enrich -> validate -> check -> apply. Two calls.
+
+    `checks.merge` adds the deterministic rules to whatever the model reported.
+    It runs unconditionally, including when `validate_one` fell back to the
+    unaudited marker: a record whose validation call died still gets the free
+    half of the audit, which on a free tier is the difference between a degraded
+    record and an unexamined one.
+    """
     product = enrich_one(record)
     report = validate_one(record, product)
+    report = checks.merge(record, product, report)
     return apply_report(product, report), report
 
 

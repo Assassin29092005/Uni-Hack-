@@ -1,4 +1,4 @@
-"""Deterministic cleanup. Runs before enrichment; makes zero model calls.
+"""Deterministic cleanup. Runs before enrichment AND after it; zero model calls.
 
 Everything here is reproducible, free, and instant. Sending "MM" -> "mm" through
 an LLM costs latency, money, and adds a hallucination surface for zero gain — so
@@ -7,6 +7,12 @@ already-consistent input.
 
 Second benefit: it makes the AI's contribution measurable. Whatever the enriched
 record contains beyond this file's output is what the model actually added.
+
+Both directions matter. `normalize_record` cleans what goes in; `normalize_specs`
+cleans what comes back, because the model names its own output attributes and
+will call the same quantity "Operating Voltage" on one record and "voltage" on
+the next. Normalising only the input half means "normalized units, deduped
+attributes" holds for data we didn't generate and not for data we did.
 """
 
 import re
@@ -62,8 +68,18 @@ _VALUE_UNIT = re.compile(r"^\s*([\d.,]+(?:\s*[-–x×]\s*[\d.,]+)?)\s*([a-zA-Z°
 
 
 def normalize_key(key: str) -> str:
-    """Attribute name -> canonical name. Unknown names pass through cleaned."""
-    cleaned = re.sub(r"[^a-z0-9 ]+", " ", key.strip().lower())
+    """Attribute name -> canonical name. Unknown names pass through cleaned.
+
+    The character class is `[_\\W]` and not `[^a-z0-9 ]` for a reason (BUG-005):
+    the ASCII-only version deleted every accented and non-Latin letter, so a
+    German "Artikel-Nr." survived, a French "débit" became "d bit", and a Chinese
+    "型号" collapsed to the empty string — which `normalize_record` then dropped
+    as a blank key. Three of four attributes vanished from our own Chinese golden
+    record before the model saw any of them. `\\W` is unicode-aware, so scripts
+    other than Latin survive; `_` is listed separately because it IS a word
+    character but reads as a separator in supplier headers ("part_no" -> "sku").
+    """
+    cleaned = re.sub(r"[_\W]+", " ", key.strip().lower(), flags=re.UNICODE)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     return ATTRIBUTE_ALIASES.get(cleaned, cleaned)
 
@@ -110,6 +126,47 @@ def normalize_record(sku: str, attributes: dict[str, str], text: str = "") -> "R
             continue  # SKU is passed separately; blank keys are export artifacts
         out.setdefault(canonical, normalize_value(str(value)))
     return RawRecord(sku=sku.strip(), attributes=out, text=re.sub(r"\s+", " ", text or "").strip())
+
+
+def normalize_specs(specs: list) -> list:
+    """Canonicalise model-produced specs and drop exact duplicates.
+
+    Runs on the way OUT of enrichment, mirroring what `normalize_record` does on
+    the way in. Without it the catalog stores whatever the model happened to call
+    the attribute that minute — "Operating Voltage", "voltage", "VOLTAGE" — with
+    units spelled "VDC", "volts", or "V DC", and the deduped-attribute claim only
+    covers the half of the data we didn't generate.
+
+    Only *exact* duplicates are merged (same canonical name, value, and unit);
+    the higher-confidence copy wins. Two specs that share a name and disagree
+    about the value are deliberately BOTH kept: that is a contradiction, not a
+    duplicate, and `checks.contradictory_specs` reports it. Silently dropping one
+    would resolve the more interesting failure by hiding it, and would let the
+    catalog pick a winner between two claims on the basis of a self-reported
+    confidence score.
+
+    Input order is preserved so the UI and the audit trail stay diff-able.
+    """
+    canonical = []
+    for spec in specs:
+        copy = spec.model_copy()
+        copy.name = normalize_key(spec.name)
+        if copy.unit:
+            copy.unit = normalize_unit(copy.unit)
+        if copy.value:
+            copy.value = normalize_value(copy.value)
+        canonical.append(copy)
+
+    best: dict[tuple, object] = {}
+    order: list[tuple] = []
+    for spec in canonical:
+        identity = (spec.name, (spec.value or "").lower(), (spec.unit or "").lower())
+        if identity not in best:
+            best[identity] = spec
+            order.append(identity)
+        elif spec.confidence > best[identity].confidence:
+            best[identity] = spec
+    return [best[identity] for identity in order]
 
 
 # ponytail: hand-maintained alias tables, so coverage is whatever we thought of.
