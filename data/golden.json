@@ -1,25 +1,51 @@
 [
   {
     "sku": "SKF-6205-2RS",
-    "attributes": {"Product Name": "Deep Groove Ball Bearing", "Mfr": "SKF",
-                   "Dims": "25MM bore x 52mm OD x 15 mm", "WT": "0.13KG"},
+    "attributes": {
+      "Product Name": "Deep Groove Ball Bearing",
+      "Mfr": "SKF",
+      "Dims": "25MM bore x 52mm OD x 15 mm",
+      "WT": "0.13KG"
+    },
     "text": "Sealed both sides. Max speed 14000 rpm grease lubricated.",
     "note": "Well-specified. Everything asked for is present in the input.",
     "expect": {
-      "grounded": ["name", "brand", "category", "description"],
-      "values": {"brand": "SKF"},
-      "forbidden_specs": ["dynamic load", "static load", "price"]
+      "grounded": [
+        "name",
+        "brand",
+        "category",
+        "description"
+      ],
+      "values": {
+        "brand": "SKF"
+      },
+      "forbidden_specs": [
+        "dynamic load",
+        "static load",
+        "price"
+      ]
     }
   },
   {
     "sku": "FST-M8X30-A2",
-    "attributes": {"Dims": "M8 x 30"},
+    "attributes": {
+      "Dims": "M8 x 30"
+    },
     "text": "Hex head cap screw",
     "note": "TRAP: no manufacturer anywhere. Brand must be refused.",
     "expect": {
-      "grounded": ["category", "description"],
-      "absent_core": ["brand"],
-      "forbidden_specs": ["tensile", "torque", "proof load"]
+      "grounded": [
+        "category",
+        "description"
+      ],
+      "absent_core": [
+        "brand"
+      ],
+      "forbidden_specs": [
+        "tensile",
+        "torque",
+        "proof load"
+      ]
     }
   },
   {
@@ -28,66 +54,978 @@
     "text": "",
     "note": "TRAP: nothing at all. Every field must be refused.",
     "expect": {
-      "absent_core": ["name", "brand", "category", "description"],
+      "absent_core": [
+        "name",
+        "brand",
+        "category",
+        "description"
+      ],
       "max_specs": 0
     }
   },
   {
     "sku": "RLY-24DC-4PDT",
-    "attributes": {"Product Name": "Miniature Power Relay", "Mfr": "Omron",
-                   "Voltage": "24VDC", "WT": "0.085 kg"},
+    "attributes": {
+      "Product Name": "Miniature Power Relay",
+      "Mfr": "Omron",
+      "Voltage": "24VDC",
+      "WT": "0.085 kg"
+    },
     "text": "4PDT contacts rated 5A at 250VAC. DIN rail mount.",
     "note": "Well-specified. Checks unit handling on voltage and current.",
     "expect": {
-      "grounded": ["name", "brand", "category", "description"],
-      "values": {"brand": "Omron"},
-      "required_specs": ["voltage"],
-      "forbidden_specs": ["coil resistance", "mechanical life", "price"]
+      "grounded": [
+        "name",
+        "brand",
+        "category",
+        "description"
+      ],
+      "values": {
+        "brand": "Omron"
+      },
+      "required_specs": [
+        "voltage"
+      ],
+      "forbidden_specs": [
+        "coil resistance",
+        "mechanical life",
+        "price"
+      ]
     }
   },
   {
     "sku": "HDX-4025-200",
-    "attributes": {"Mfr": "Bosch Rexroth", "Dims": "25 MM x 200MM", "WT": "3.4 KG"},
+    "attributes": {
+      "Mfr": "Bosch Rexroth",
+      "Dims": "25 MM x 200MM",
+      "WT": "3.4 KG"
+    },
     "text": "Hydraulic cylinder assembly. Bore 25mm. Max operating pressure 210 bar.",
     "note": "Name absent from input but derivable from brand + type. Pressure stated.",
     "expect": {
-      "grounded": ["brand", "category", "description"],
-      "values": {"brand": "Bosch Rexroth"},
-      "required_specs": ["bore", "pressure"],
-      "forbidden_specs": ["rod diameter", "cushioning", "price"]
+      "grounded": [
+        "brand",
+        "category",
+        "description"
+      ],
+      "values": {
+        "brand": "Bosch Rexroth"
+      },
+      "required_specs": [
+        "bore",
+        "pressure"
+      ],
+      "forbidden_specs": [
+        "rod diameter",
+        "cushioning",
+        "price"
+      ]
     }
   },
   {
     "sku": "PXC-3044076",
-    "attributes": {"Mfr": "Phoenix Contact", "Product Name": "UT 2,5 Terminal Block"},
+    "attributes": {
+      "Mfr": "Phoenix Contact",
+      "Product Name": "UT 2,5 Terminal Block"
+    },
     "text": "Feed-through terminal block, screw connection, 2.5 mm2 cross section, grey.",
     "note": "TRAP: current rating is a well-known spec for this part but is NOT in the input.",
     "expect": {
-      "grounded": ["name", "brand", "category", "description"],
-      "values": {"brand": "Phoenix Contact"},
-      "forbidden_specs": ["current rating", "rated current", "stripping length"]
+      "grounded": [
+        "name",
+        "brand",
+        "category",
+        "description"
+      ],
+      "values": {
+        "brand": "Phoenix Contact"
+      },
+      "forbidden_specs": [
+        "current rating",
+        "rated current",
+        "stripping length"
+      ]
     }
   },
   {
     "sku": "GEN-BRK-1234",
-    "attributes": {"WT": "0.4 kg"},
+    "attributes": {
+      "WT": "0.4 kg"
+    },
     "text": "Steel mounting bracket, 3 holes, zinc plated.",
     "note": "TRAP: opaque SKU that invites decoding. No brand exists to find.",
     "expect": {
-      "grounded": ["category", "description"],
-      "absent_core": ["brand"],
-      "forbidden_specs": ["hole diameter", "thickness", "load rating"]
+      "grounded": [
+        "category",
+        "description"
+      ],
+      "absent_core": [
+        "brand"
+      ],
+      "forbidden_specs": [
+        "hole diameter",
+        "thickness",
+        "load rating"
+      ]
     }
   },
   {
     "sku": "VLV-SOL-DS",
-    "attributes": {"Product Name": "Solenoid Valve", "Voltage": "24"},
+    "attributes": {
+      "Product Name": "Solenoid Valve",
+      "Voltage": "24"
+    },
     "text": "2/2-way solenoid valve. Torque: see datasheet. Pressure range: consult catalogue.",
-    "note": "TRAP: input explicitly defers two specs. Deferred is not the same as known.",
+    "note": "TRAP: input names torque and pressure only to defer them elsewhere. Deferred is not known.",
     "expect": {
-      "grounded": ["name", "category", "description"],
-      "absent_core": ["brand"],
-      "forbidden_specs": ["torque", "pressure"]
+      "grounded": [
+        "name",
+        "category",
+        "description"
+      ],
+      "absent_core": [
+        "brand"
+      ],
+      "deferred_specs": [
+        "torque",
+        "pressure"
+      ]
+    }
+  },
+  {
+    "sku": "MULT-DE-6204",
+    "attributes": {
+      "Artikel-Nr.": "MULT-DE-6204",
+      "Warengruppe": "Wälzlager",
+      "Menge/VE": "10 Stk",
+      "Zolltarifnummer": "84821010"
+    },
+    "text": "Rillenkugellager, einreihig, beidseitig abgedichtet. Hersteller: Schaeffler. Innendurchmesser 20 mm, Außendurchmesser 47 mm, Breite 14 mm. Betriebstemperatur -30 °C bis +120 °C. Lieferung im Originalkarton, Datenblatt auf Anfrage.",
+    "note": "German-only datasheet with the brand stated inside the German text ('Hersteller: Schaeffler') — must be grounded, not abstained on.",
+    "expect": {
+      "grounded": [
+        "name",
+        "brand",
+        "category",
+        "description"
+      ],
+      "values": {
+        "brand": "Schaeffler"
+      },
+      "required_specs": [
+        "temperatur"
+      ],
+      "forbidden_specs": [
+        "Drehzahl",
+        "speed",
+        "rpm",
+        "Gewicht",
+        "weight",
+        "Traglast",
+        "load",
+        "Schmier",
+        "lubric"
+      ],
+      "max_specs": 10
+    }
+  },
+  {
+    "sku": "MULT-FR-ES-0442",
+    "attributes": {
+      "Réf. fournisseur": "MULT-FR-ES-0442",
+      "Famille": "Distributeurs pneumatiques",
+      "UOM": "PCE",
+      "Origen": "UE"
+    },
+    "text": "Électrovanne 5/2 à commande pilote, rappel par ressort. Bobine 24 V CC. Presión de trabajo: 2 – 8 bar. Conexión G1/8, cuerpo de latón niquelado. Grado de protección IP65. Montage sur embase ou en ligne.",
+    "note": "TRAP: mixed French/Spanish listing with no manufacturer named anywhere — brand must come back null while the never-mentioned attributes stay unfilled.",
+    "expect": {
+      "grounded": [
+        "name",
+        "category",
+        "description"
+      ],
+      "absent_core": [
+        "brand"
+      ],
+      "forbidden_specs": [
+        "temperatur",
+        "débit",
+        "caudal",
+        "flow",
+        "Kv",
+        "poids",
+        "peso",
+        "weight",
+        "durée de vie",
+        "vida útil"
+      ],
+      "max_specs": 12
+    }
+  },
+  {
+    "sku": "MULT-CN-IT-7731",
+    "attributes": {
+      "型号": "MULT-CN-PT100-2",
+      "货号": "MULT-CN-IT-7731",
+      "Categoria": "Sensori di temperatura",
+      "包装": "1 pz"
+    },
+    "text": "PT100 铂电阻温度传感器。探头长度 100 mm，螺纹 G1/2，不锈钢护套。测量范围 -50~+400 °C。品牌：宇电 (Yudian)。\nNota (IT): Qualità superiore, garanzia 2 anni, consegna rapida, prezzo imbattibile — il partner ideale per la tua linea di produzione.",
+    "note": "TRAP: Chinese catalogue row plus an Italian marketing block — brand is stated verbatim, and attributes never mentioned anywhere (accuracy, ingress protection) must not appear; the spec cap limits fluff inflation.",
+    "expect": {
+      "grounded": [
+        "name",
+        "brand",
+        "category",
+        "description"
+      ],
+      "values": {
+        "brand": "Yudian"
+      },
+      "forbidden_specs": [
+        "精度",
+        "accuracy",
+        "tolleranza",
+        "防护",
+        "protezione",
+        "ingress"
+      ],
+      "max_specs": 8
+    }
+  },
+  {
+    "sku": "CONT-RLY-0241",
+    "attributes": {
+      "Item No": "CONT-RLY-0241",
+      "Mfr": "Finder",
+      "Product Type": "Power relay, plug-in",
+      "Coil Voltage": "24 VDC",
+      "Contact Arrangement": "SPDT",
+      "UOM": "EA"
+    },
+    "text": "Finder plug-in power relay for panel mounting. NOTE from datasheet page 2: the coil is energised from a 110 VAC supply -- do not apply DC to the coil. Socket sold separately.",
+    "note": "Coil voltage is self-contradictory (column 24 VDC vs datasheet note 110 VAC), so no expectation asserts it; brand and contact arrangement are stated unambiguously and must be extracted.",
+    "expect": {
+      "grounded": [
+        "name",
+        "brand",
+        "category",
+        "description"
+      ],
+      "values": {
+        "brand": "Finder"
+      },
+      "required_specs": [
+        "contact"
+      ],
+      "forbidden_specs": [
+        "ingress protection",
+        "temperature"
+      ]
+    }
+  },
+  {
+    "sku": "CONT-BRG-6205-X",
+    "attributes": {
+      "SKU": "CONT-BRG-6205-X",
+      "Manufacturer": "Timken",
+      "Category": "Deep groove ball bearing",
+      "Bore dia (mm)": "25",
+      "Closure": "2RS sealed"
+    },
+    "text": "Genuine NSK deep groove ball bearing, single row. Bore measures 20 mm per incoming inspection ticket #4471. Supplied in original box.",
+    "note": "Manufacturer column (Timken) contradicts the text (NSK) and bore 25 mm contradicts 20 mm, so neither brand nor bore carries any expectation; closure is stated once and must be extracted.",
+    "expect": {
+      "grounded": [
+        "name",
+        "category",
+        "description"
+      ],
+      "required_specs": [
+        "closure"
+      ],
+      "forbidden_specs": [
+        "load",
+        "lubric",
+        "temperature",
+        "speed"
+      ]
+    }
+  },
+  {
+    "sku": "CONT-PMP-DIA-77",
+    "attributes": {
+      "part": "CONT-PMP-DIA-77",
+      "desc": "Diaphragm dosing pump, OEM replacement",
+      "Max Flow": "40 L/min",
+      "Weight (kg)": "12",
+      "Port": "1/2 in NPT"
+    },
+    "text": "Compact diaphragm dosing pump. Rated maximum flow is 12 L/min per the revised spec sheet (rev C supersedes rev A). Unit weighs 3.4 kg dry. Ports are 1/2 in NPT. Supplied without motor; no brand marking anywhere on the housing.",
+    "note": "TRAP: the input explicitly states there is no brand marking, so brand must come back null; flow and weight are contradicted between column and text and therefore carry no expectation, while port agrees in both.",
+    "expect": {
+      "grounded": [
+        "name",
+        "category",
+        "description"
+      ],
+      "absent_core": [
+        "brand"
+      ],
+      "required_specs": [
+        "port"
+      ],
+      "forbidden_specs": [
+        "voltage",
+        "pressure"
+      ]
+    }
+  },
+  {
+    "sku": "RARE-HVAC-OBD-0455",
+    "attributes": {
+      "ITEM_DESC": "Opposed blade volume control damper, galv steel, 450 x 300 mm",
+      "Blade Type": "Opposed",
+      "Frame": "Galvanised steel channel, 30mm",
+      "SUPPLIER": "-",
+      "Stock UOM": "EA"
+    },
+    "text": "Rectangular volume control damper for supply air ductwork. Opposed-blade action gives smoother throttling across mid-open positions than parallel blade. Blades roll formed, frame 30mm galvanised channel. Nominal size 450 x 300 mm. Manual quadrant handle supplied loose in the carton. Ships flat-packed, assemble on site.",
+    "note": "TRAP: HVAC damper with supplier field blanked to '-' - brand must be refused, and no leakage class, pressure drop, velocity or temperature rating is stated anywhere.",
+    "expect": {
+      "grounded": [
+        "name",
+        "category",
+        "description"
+      ],
+      "absent_core": [
+        "brand"
+      ],
+      "values": {
+        "name": "damper"
+      },
+      "required_specs": [
+        "blade"
+      ],
+      "forbidden_specs": [
+        "leakage",
+        "pressure",
+        "velocity",
+        "torque",
+        "temperature"
+      ],
+      "max_specs": 10
+    }
+  },
+  {
+    "sku": "RARE-LAB-CRYO-0K2",
+    "attributes": {
+      "Brand": "KRYOSTAT LABS",
+      "Model": "CT-2L",
+      "Item": "Cold trap, 2 L, borosilicate",
+      "Ground Joint": "45/50",
+      "Stock UOM": "EACH"
+    },
+    "text": "KRYOSTAT LABS CT-2L cold trap for rotary evaporator vacuum lines. 2 litre borosilicate glass vessel with 45/50 ground joint. Dewar flask NOT included. Protects the pump from solvent carryover during distillation. Hand wash only; do not autoclave.",
+    "note": "Unfamiliar lab glassware with brand stated verbatim - core fields are all fillable, but no temperature, pressure, weight or power figure exists to extract.",
+    "expect": {
+      "grounded": [
+        "name",
+        "brand",
+        "category",
+        "description"
+      ],
+      "values": {
+        "brand": "KRYOSTAT LABS"
+      },
+      "required_specs": [
+        "joint"
+      ],
+      "forbidden_specs": [
+        "temperature",
+        "pressure",
+        "weight",
+        "power"
+      ],
+      "max_specs": 8
+    }
+  },
+  {
+    "sku": "RARE-MINE-JAWLNR-18",
+    "attributes": {
+      "DESCRIPTION": "JAW LINER, FIXED, 18% Mn, TOOTH PROFILE COARSE - FOR PRIMARY CRUS",
+      "MFR NAME": "",
+      "Weight (kg)": "410",
+      "PLANT": "Site 4 Warehouse"
+    },
+    "text": "Replacement fixed jaw liner (fixed jaw plate) for a primary jaw crusher. Cast in 18% manganese steel; work hardens in service. Coarse tooth profile. Casting number stamped on the back face. Two-off per set - order the fixed and swing plate together. Weight 410 kg each. Lifting eyes cast in.",
+    "note": "TRAP: mining wear part with an empty MFR NAME field and a truncated description - brand must be null and no crusher model, throughput or dimensions may be invented.",
+    "expect": {
+      "grounded": [
+        "name",
+        "category",
+        "description"
+      ],
+      "absent_core": [
+        "brand"
+      ],
+      "values": {
+        "name": "jaw"
+      },
+      "required_specs": [
+        "weight"
+      ],
+      "forbidden_specs": [
+        "throughput",
+        "capacity",
+        "dimensions",
+        "warranty",
+        "hrc",
+        "voltage"
+      ],
+      "max_specs": 8
+    }
+  },
+  {
+    "sku": "UNIT-NPT-0250",
+    "attributes": {
+      "Item No.": "UNIT-NPT-0250",
+      "Description": "3/2-way solenoid valve, 1/4 in NPT ports",
+      "Manufacturer": "Pneumax",
+      "Coil Voltage": "24",
+      "Body Matl": "Brass"
+    },
+    "text": "Direct-acting 3/2-way solenoid valve, normally closed. Port size 1/4 in NPT female, both ends. Orifice 2.5 mm. Coil voltage listed as 24 -- datasheet page truncated here, AC/DC not stated. Operating pressure 0 to 10 bar (0-145 psi). Ambient temp -10 to +60 C. Brass body.",
+    "note": "TRAP: bare number 'Coil Voltage: 24' with no unit, plus fractional imperial thread 1/4 in NPT and a dual-unit pressure range -- the checkable part is that no spec the truncated page never gave (IP rating, response time, duty cycle, flow rate, weight) may appear.",
+    "expect": {
+      "grounded": [
+        "name",
+        "brand",
+        "category",
+        "description"
+      ],
+      "values": {
+        "brand": "Pneumax"
+      },
+      "required_specs": [
+        "voltage",
+        "port",
+        "pressure"
+      ],
+      "forbidden_specs": [
+        "flow rate",
+        "weight",
+        "ip rating",
+        "response time",
+        "duty cycle"
+      ]
+    }
+  },
+  {
+    "sku": "UNIT-RPM-14K",
+    "attributes": {
+      "PART": "UNIT-RPM-14K",
+      "PRODUCT NAME": "Angular contact spindle bearing 7008C",
+      "BRAND": "",
+      "Bore dia": "40mm +/- 0.02",
+      "Max Speed": "14,000 rpm (grease)",
+      "Temp Range": "-40 to +85 °C"
+    },
+    "text": "High precision angular contact ball bearing. Bore 40mm +/- 0.02, outside diameter 68 mm, width 15 mm. Speed rating 14,000 rpm grease lubricated / 20,000 r.p.m. oil mist. Operating temperature -40 to +85 C. Contact angle 15 deg. Supplier column for brand came through blank on this export line.",
+    "note": "TRAP: thousands separator '14,000 rpm', a +/- tolerance on bore, a signed temperature range, and an empty BRAND column that must stay null.",
+    "expect": {
+      "grounded": [
+        "name",
+        "category",
+        "description"
+      ],
+      "absent_core": [
+        "brand"
+      ],
+      "required_specs": [
+        "bore",
+        "speed",
+        "temp"
+      ],
+      "forbidden_specs": [
+        "load rating",
+        "dynamic",
+        "static",
+        "weight",
+        "cage",
+        "preload",
+        "seal"
+      ]
+    }
+  },
+  {
+    "sku": "UNIT-MIX-3816",
+    "attributes": {
+      "sku": "UNIT-MIX-3816",
+      "Name": "Beam clamp shaft coupling, 3/8-16 UNC clamp screws",
+      "Vendor": "Ruland Manufacturing",
+      "Category": "Power Transmission > Shaft Couplings",
+      "Torsional stiffness": "50 Nm/rad",
+      "Bolt tightening torque": "12.4 in-lbs (1.4 N·m)"
+    },
+    "text": "Single-beam clamp style shaft coupling for encoder and servo feedback duty. Bore A 0.375 in (9.53 mm), Bore B 10 mm -- mixed inch/metric pair. Clamp screws 3/8-16 UNC. Torsional stiffness 50 Nm/rad. Recommended screw tightening torque 12.4 in-lbs (1.4 N·m). Overall length 1.50 in.",
+    "note": "TRAP: compound unit (Nm/rad), a UNC thread callout, and inch/metric bores in one record -- extract only these, invent no rating the sheet never gives.",
+    "expect": {
+      "grounded": [
+        "name",
+        "brand",
+        "category",
+        "description"
+      ],
+      "values": {
+        "brand": "Ruland"
+      },
+      "required_specs": [
+        "torsional stiffness",
+        "bore",
+        "torque"
+      ],
+      "forbidden_specs": [
+        "rated speed",
+        "misalignment",
+        "material",
+        "weight",
+        "moment of inertia",
+        "backlash"
+      ]
+    }
+  },
+  {
+    "sku": "DATA-RLY-8801",
+    "attributes": {
+      "Item No.": "DATA-RLY-8801",
+      "MFR": "Finder",
+      "Prod Description": "Industrial interface relay, plug-in",
+      "UOM": "EA",
+      "Web Status": "ACTIVE"
+    },
+    "text": "<div class=\"pdp-copy\"><p>&nbsp;</p><h2>Industry-leading reliability, engineered without compromise.</h2><p>For more than four decades our&nbsp;interface relays have been the quiet workhorse behind panels that simply cannot fail. Built for demanding panel environments where heat, dust and vibration are facts of life, this plug-in interface relay delivers the switching confidence your process deserves.</p><ul><li>&bull;&nbsp;&nbsp;&nbsp;Coil voltage: 24 V DC</li><li>&bull;&nbsp;&nbsp;&nbsp;Contact rating: 16 A</li><li>&bull;&nbsp;&nbsp;&nbsp;Trusted by integrators worldwide</li><li>&bull;&nbsp;&nbsp;&nbsp;Best-in-class value</li></ul><p>Long service life and rugged construction mean fewer callouts and more uptime.&nbsp;&nbsp;&nbsp;&nbsp;Contact us for pricing, stock and volume discounts. Lead times vary by region &mdash; ask your account manager.</p><p><em>Specifications subject to change without notice.</em></p></div>",
+    "note": "TRAP: real coil voltage and contact rating are buried in HTML bullets; fluff about heat and dust must not become temperature or ingress specs (the word 'vibration' does appear in the copy, so it is not tested as forbidden).",
+    "expect": {
+      "grounded": [
+        "name",
+        "brand",
+        "category",
+        "description"
+      ],
+      "values": {
+        "brand": "Finder"
+      },
+      "required_specs": [
+        "voltage",
+        "contact"
+      ],
+      "forbidden_specs": [
+        "temperature",
+        "ip rating",
+        "ingress",
+        "weight",
+        "dimension"
+      ]
+    }
+  },
+  {
+    "sku": "DATA-FLT-2290-TRUNC",
+    "attributes": {
+      "part_no": "DATA-FLT-2290",
+      "supplier_name": "",
+      "web_category": "Filtration > Cartridge Elements",
+      "long_desc": "Pleated glass fibre filter elem",
+      "stock_uom": "PC"
+    },
+    "text": "scraped 2024-11-02 | src=vendor_pdp\n\n<p>Pleated&nbsp;glass fibre filter element.</p>\n\n\n     PRODUCT&nbsp;HIGHLIGHTS\n  &bull; Exceptional dirt-holding capacity under the toughest duty cycles\n  &bull; Micron rating: 10 &micro;m\n  &bull; Max operating temp: 120 &deg;C\n  &bull; Precision-engineered media you can rely on, batch after batch\n\n<p>Designed and validated in our own laboratory, this element is suitable for hydraulic and lubricati</p>\n\nOrdering: quote the part number above. Contact us for pricing.&nbsp;&nbsp;Datasheet rev. 3 supersedes all previou",
+    "note": "TRAP: no manufacturer anywhere (supplier_name is blank) and the description is truncated mid-word; micron and temperature are stated, everything the fluff gestures at is not.",
+    "expect": {
+      "grounded": [
+        "name",
+        "category",
+        "description"
+      ],
+      "absent_core": [
+        "brand"
+      ],
+      "required_specs": [
+        "micron",
+        "temp"
+      ],
+      "forbidden_specs": [
+        "pressure",
+        "flow",
+        "collapse",
+        "thread",
+        "length",
+        "diameter"
+      ]
+    }
+  },
+  {
+    "sku": "DATA-FLUFF-0001",
+    "attributes": {
+      "Catalog #": "DATA-FLUFF-0001",
+      "Segment": "Motion Control",
+      "Short Desc": "AC servo drive"
+    },
+    "text": "<section id=\"hero\"><h1>The AC servo drive that moves your business forward.</h1><p>&nbsp;</p><p>Precision. Performance. Peace of mind.&nbsp;&nbsp;&nbsp;Our award-winning drive platform is the result of relentless engineering and a customer-first philosophy that has earned us industry-leading reliability ratings year after year.</p><ul><li>&bull; Available in a range of power ratings to suit your application</li><li>&bull; Multiple voltage classes for global deployment</li><li>&bull; Intuitive commissioning that gets your machine running sooner</li><li>&bull; Backed by a worldwide service network</li></ul><p>Manufactured in an ISO&nbsp;9001 certified facility. All trademarks are the property of their respective owners.&nbsp;Contact us for pricing and configuration assistance &mdash; our applications team is ready to help you select the right model for your machin</p></section>",
+    "note": "TRAP: pure marketing and boilerplate; the copy names power ratings and voltage classes but never states a number, so no spec is extractable (max_specs 0 carries the test) and no brand is named.",
+    "expect": {
+      "grounded": [
+        "name",
+        "category",
+        "description"
+      ],
+      "absent_core": [
+        "brand"
+      ],
+      "forbidden_specs": [
+        "kw",
+        "current",
+        "amp",
+        "frame",
+        "efficiency"
+      ],
+      "max_specs": 0
+    }
+  },
+  {
+    "sku": "MISL-6205-2RS-C3-77",
+    "attributes": {
+      "Item Code": "MISL-6205-2RS-C3-77",
+      "Product Group": "Bearings",
+      "UOM": "EA",
+      "Pack Qty": "10"
+    },
+    "text": "Deep groove ball bearing. Bulk bin stock, boxed. Replaces legacy stock code 44/6205. Vendor supplied no datasheet or manufacturer literature with this line.",
+    "note": "TRAP: SKU mimics a well-known bearing designation scheme (6205-2RS-C3) but no maker, dimensions, seal type or clearance is stated anywhere; only the commercial attributes (group, UOM, pack qty, packaging, legacy code) are extractable.",
+    "expect": {
+      "grounded": [
+        "name",
+        "category",
+        "description"
+      ],
+      "absent_core": [
+        "brand"
+      ],
+      "forbidden_specs": [
+        "bore",
+        "inner diameter",
+        "outer diameter",
+        "width",
+        "clearance",
+        "seal",
+        "load rating",
+        "speed",
+        "lubricant"
+      ],
+      "max_specs": 5
+    }
+  },
+  {
+    "sku": "MISL-1756-IF16-XT",
+    "attributes": {
+      "Item": "MISL-1756-IF16-XT",
+      "Mfr": "",
+      "Condition": "Used - untested"
+    },
+    "text": "Analog input module pulled from a decommissioned control panel. Supplied in anti-static bag. Front label unreadable, no packaging or paperwork available. Sold as-is.",
+    "note": "TRAP: catalogue number pattern resembles a famous PLC vendor's ControlLogix scheme and the '16' invites a channel-count guess; Mfr column is present but empty, so brand must stay null.",
+    "expect": {
+      "grounded": [
+        "name",
+        "category",
+        "description"
+      ],
+      "absent_core": [
+        "brand"
+      ],
+      "forbidden_specs": [
+        "channel",
+        "resolution",
+        "voltage",
+        "current",
+        "signal range",
+        "backplane",
+        "slot",
+        "operating temperature"
+      ],
+      "max_specs": 4
+    }
+  },
+  {
+    "sku": "MISL-VLV-12-150-316",
+    "attributes": {
+      "Stock Ref": "MISL-VLV-12-150-316",
+      "Brand": "Ironvale",
+      "Range": "Ball valves",
+      "Lead time": "6-8 wks"
+    },
+    "text": "Ironvale ball valve, own-label line built to our in-house spec. Smooth quarter-turn action, trusted by maintenance teams nationwide. Full technical sheet available on request - dimensional and pressure data not included in this export (col truncat",
+    "note": "TRAP: house-brand code whose digits look like 1/2 in, Class 150 and 316 stainless, none of which the record states; the real brand IS given verbatim in an attribute. Pressure and dimensional data are named only as absent, so they are not scored as forbidden spec names.",
+    "expect": {
+      "grounded": [
+        "name",
+        "brand",
+        "category",
+        "description"
+      ],
+      "values": {
+        "brand": "Ironvale"
+      },
+      "forbidden_specs": [
+        "port size",
+        "bore size",
+        "material",
+        "body material",
+        "stainless",
+        "thread",
+        "end connection",
+        "temperature"
+      ],
+      "max_specs": 4
+    }
+  },
+  {
+    "sku": "SPAR-EMPTY-0001",
+    "attributes": {
+      "Item No.": "SPAR-EMPTY-0001",
+      "Description": "",
+      "Manufacturer": "",
+      "Product Group": "",
+      "UOM": "",
+      "Notes": ""
+    },
+    "text": "",
+    "note": "TRAP: only a SKU string exists; every other field is an empty string, so no core field and no spec has any basis.",
+    "expect": {
+      "absent_core": [
+        "name",
+        "brand",
+        "category",
+        "description"
+      ],
+      "forbidden_specs": [
+        "weight",
+        "voltage",
+        "material",
+        "dimension",
+        "thread",
+        "pressure",
+        "temperature"
+      ],
+      "max_specs": 0
+    }
+  },
+  {
+    "sku": "SPAR-WTONLY-4471",
+    "attributes": {
+      "Part Number": "SPAR-WTONLY-4471",
+      "weight": "1.2 kg",
+      "Description": "N/A",
+      "Brand": "-",
+      "Material": "TBD",
+      "Voltage": "",
+      "Product Family": "see catalogue",
+      "Colour": "n.a."
+    },
+    "text": "n.a. — refer supplier catalogue for full specification. TBD",
+    "note": "TRAP: the single real datum is a weight; every other column holds a placeholder (N/A, -, TBD, n.a., see catalogue, blank) that must be read as ABSENT — enforced by max_specs 1, so emitting material/voltage/colour from placeholders fails the record.",
+    "expect": {
+      "absent_core": [
+        "name",
+        "brand",
+        "category",
+        "description"
+      ],
+      "required_specs": [
+        "weight"
+      ],
+      "forbidden_specs": [
+        "torque",
+        "pressure",
+        "temperature",
+        "thread",
+        "diameter"
+      ],
+      "max_specs": 1
+    }
+  },
+  {
+    "sku": "SPAR-AMBIG-77Q",
+    "attributes": {
+      "Part No": "SPAR-AMBIG-77Q",
+      "Desc": "Coupling",
+      "Supplier": "see catalogue",
+      "Class": "n.a.",
+      "Size": "-",
+      "Datasheet": "TBD"
+    },
+    "text": "Coupling. Further details TBD.",
+    "note": "TRAP: one ambiguous word ('Coupling') is the only real content — it may seed a name, but supplier/class/size placeholders must not become a brand or any spec (max_specs 0 enforces it).",
+    "expect": {
+      "grounded": [
+        "name"
+      ],
+      "absent_core": [
+        "brand"
+      ],
+      "values": {
+        "name": "Coupling"
+      },
+      "forbidden_specs": [
+        "bore",
+        "torque",
+        "material",
+        "pressure",
+        "temperature"
+      ],
+      "max_specs": 0
+    }
+  },
+  {
+    "sku": "RICH-VFD-2K2-400",
+    "attributes": {
+      "Manufacturer": "Norvex Drives",
+      "Product Type": "AC Variable Frequency Drive",
+      "Rated Power (kW)": "2.2",
+      "Input Volt.": "380-480 VAC 3-phase",
+      "Output current": "5.6 A",
+      "Switching freq": "2-16 kHz",
+      "Enclosure": "IP20",
+      "Ambient temp range": "-10 to +50 degC",
+      "Weight kg": "1.9",
+      "Control method": "Sensorless vector",
+      "Comms port": "RS-485 Modbus RTU",
+      "Mounting": "DIN rail or panel"
+    },
+    "text": "Norvex compact wall-mount drive for pumps, fans and conveyors. Efficiency 97% at rated load. Overload 150% for 60 s. Integrated EMC filter class C2. Removable keypad with 4-line display. Supplied with 24 month warranty.",
+    "note": "RICH: densely stated specs across attributes and text - system must extract many without dropping any, while inventing none.",
+    "expect": {
+      "grounded": [
+        "name",
+        "brand",
+        "category",
+        "description"
+      ],
+      "values": {
+        "brand": "Norvex Drives"
+      },
+      "required_specs": [
+        "power",
+        "current",
+        "switching",
+        "enclosure",
+        "temp",
+        "weight",
+        "efficiency"
+      ],
+      "forbidden_specs": [
+        "MTBF",
+        "altitude",
+        "humidity",
+        "noise",
+        "shock"
+      ]
+    }
+  },
+  {
+    "sku": "DEFER-VLV-BFY-DN80",
+    "attributes": {
+      "Supplier": "Kessler Fluid Systems",
+      "Item": "Butterfly valve, wafer type, DN80",
+      "Body Material": "GG25 cast iron",
+      "Disc": "CF8M stainless",
+      "Seat": "EPDM",
+      "Nominal Size": "DN80 / 3 in",
+      "Pressure Rating": "on request",
+      "Operating Torque": "see datasheet KFS-BFY rev 4",
+      "Face-to-face dim": "per drawing A-4471",
+      "Temp range": "-10 ... +120 C"
+    },
+    "text": "Wafer-style butterfly valve for general HVAC and water service. Lever handle supplied as standard; gearbox and electric actuator options available. Kv value: refer to selection table in catalogue section 7. Weight: TBD. Test certificate available on request.",
+    "note": "TRAP: deferred entries (pressure, torque, face-to-face, Kv, weight) sit beside real ones as distractors; only genuinely unmentioned attributes are scored as hallucinations.",
+    "expect": {
+      "grounded": [
+        "name",
+        "brand",
+        "category",
+        "description"
+      ],
+      "values": {
+        "brand": "Kessler Fluid Systems"
+      },
+      "required_specs": [
+        "material",
+        "seat",
+        "size",
+        "temp"
+      ],
+      "forbidden_specs": [
+        "voltage",
+        "leakage",
+        "cycle",
+        "noise",
+        "warranty"
+      ],
+      "deferred_specs": [
+        "kv",
+        "weight"
+      ]
+    }
+  },
+  {
+    "sku": "RICHDEF-LC-S250",
+    "attributes": {
+      "MFR": "Bramley Instruments",
+      "Desc": "S-type load cell, 250 kg, alloy steel, nickel plated",
+      "Rated Capacity": "250 kg",
+      "Rated Output": "3.0 mV/V +/-0.1%",
+      "Excitation": "5-15 VDC (10 V recommended)",
+      "Non-linearity": "0.03% FS",
+      "Zero balance": "+/-1% FS",
+      "Cable": "4-core shielded, 3 m",
+      "Protection": "IP67",
+      "Operating Temp": "-20 to +65 C",
+      "Safe Overload": "150% FS",
+      "Creep (30 min)": "see test report on file",
+      "Mounting hardware": "per drawing BI-LC-S/2, not supplied"
+    },
+    "text": "S-beam tension/compression load cell for hopper and platform scales. Compensated temperature range -10 to +40 C. Wiring: red +exc, black -exc, green +sig, white -sig. Fatigue life: consult factory. OIML certification status: contact sales.",
+    "note": "TRAP: rich stated specs sit next to deferred ones (creep, fatigue, certification, mounting) - extract the former; scored hallucination check uses attributes the input never names at all.",
+    "expect": {
+      "grounded": [
+        "name",
+        "brand",
+        "category",
+        "description"
+      ],
+      "values": {
+        "brand": "Bramley Instruments"
+      },
+      "required_specs": [
+        "capacity",
+        "output",
+        "excitation",
+        "linearity",
+        "protection",
+        "temp",
+        "cable",
+        "zero"
+      ],
+      "forbidden_specs": [
+        "hysteresis",
+        "repeatability",
+        "insulation",
+        "warranty"
+      ],
+      "deferred_specs": [
+        "fatigue",
+        "oiml"
+      ]
     }
   }
 ]

@@ -110,7 +110,13 @@ ones before claiming anything.
 |---|---|---|
 | `python test_pipeline.py` | free, ~1s | deterministic logic that breaks *silently*: normalization, confidence gating, scoring, store idempotency, provider schema dialects, HTML escaping |
 | `python -m src.probe` | ~6 API calls | that the validator actually objects — planted errors plus a clean **control** that must stay silent |
-| `python -m src.golden` | ~16 API calls | accuracy against hand-checked expectations in `data/golden.json`; headline metric is hallucination count |
+| `python -m src.golden` | 2 calls/record | accuracy against hand-checked expectations in `data/golden.json` (32 records); headline metric is hallucination count |
+
+The golden set exceeds a day's free-tier quota, so scores **accumulate** in
+`golden_scores.json` across runs and models: score a slice today, the rest
+tomorrow, `--report` for the aggregate. Every score records which model produced
+it. Expectations must be verifiable from the record's own input alone
+(DECISIONS 016) — the structural test enforces it.
 
 Assert-based, no framework, no fixtures. Two rules learned the hard way:
 

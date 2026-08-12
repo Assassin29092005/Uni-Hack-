@@ -23,6 +23,50 @@ The `Left out` line matters most under a deadline — it separates "not built ye
 
 ---
 
+## FEAT-003 — Golden set widened 8 → 32 records   [DONE, 28/32 scored]
+
+**Scoped:** Move the accuracy claim from "promising signal on 8 records" to
+something defensible, by widening `data/golden.json` across trap categories the
+original set never touched.
+
+**Why:** Every accuracy number in the README rested on 8 records, 5 of them
+traps. That is a smoke test. A judge pasting an unusual product was untested
+territory, and we had no way to know it.
+
+**Design:** 24 new records across 8 adversarial categories — non-English and
+mixed-language catalogue text, self-contradictory rows, unfamiliar categories
+(mining wear parts, lab glassware, HVAC dampers), unit edge cases (fractional
+imperial, ranges, tolerances, bare unitless numbers), scraped HTML noise,
+misleading part numbers, near-empty/placeholder rows, and rich-vs-deferred specs.
+
+Records were drafted with model assistance, then subjected to a rule that makes
+authorship irrelevant: **every expectation must be verifiable from that record's
+own input alone** (DECISIONS 016), enforced mechanically by the test suite. Also
+split `deferred_specs` out from `forbidden_specs` (DECISIONS 017) — the trap
+where an attribute is *named but explicitly unvalued* was previously
+inexpressible and had been silently dropped.
+
+**Touches:** `data/golden.json`, `src/golden.py` (deferred_specs scoring, score
+caching, model rotation, `--report`), `test_pipeline.py` (structural gate).
+
+**Verified:** 28/32 scored. Grounding 127/131 (97%), abstention 163/169 (96%),
+values 17/17, **6 hallucinations**. 19 tests pass.
+
+**The result that matters:** widening 8 → 32 moved hallucinations from 0 to 6,
+and 5 of those 6 are a single behaviour — decoding part numbers from memory
+(BUG-004). The old set wasn't measuring the hard cases. Finding a specific,
+reproducible, fixable failure mode is worth more than the clean scoreboard it
+replaced.
+
+**Left out:**
+- The BUG-004 prompt fix is drafted but **not applied** — quota ran out, and
+  shipping an unverified change to the enrichment prompt could suppress
+  legitimate inference along with the hallucinations.
+- 4 records unscored; the model-vs-difficulty confound unresolved (6 calls).
+- Records are still English-schema'd JSON; no PDF or image inputs in the set.
+
+---
+
 ## FEAT-002 — UI, and the two verification harnesses   [DONE]
 
 **Scoped:** Milestones 7–8 plus the evidence needed to defend the two judging

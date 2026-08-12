@@ -100,25 +100,46 @@ per run because it matters — the accuracy figures come from
 `gemini-2.5-flash-lite`, the *weaker* of the two models used, so treat them as a
 floor rather than a ceiling.
 
-### Accuracy — `python -m src.golden`, 8 hand-checked records, gemini-2.5-flash-lite
+### Accuracy — `python -m src.golden`, 28 of 32 hand-checked records
+
+**32 records, 24 of them deliberate traps**, covering non-English catalogue text,
+self-contradictory rows, unfamiliar categories (mining wear parts, lab glassware,
+HVAC dampers), imperial/fractional/range units, scraped HTML noise, misleading
+part numbers, near-empty rows, and specs the supplier explicitly defers.
 
 | Metric | Result |
 |---|---|
-| Grounding — filled what it should | 24/25 (96%) |
-| **Abstention — refused what it should** | **28/28 (100%)** |
-| Values — matched known answers | 4/4 (100%) |
-| **Hallucinations** | **0** |
-| Latency | 4.2s per record (2 API calls each) |
+| Grounding — filled what it should | 127/131 (97%) |
+| Abstention — refused what it should | 163/169 (96%) |
+| Values — matched known answers | 17/17 (100%) |
+| **Hallucinations** | **6** |
 
-Five of the eight records are deliberate traps. The model was given parts whose
-missing specs it plausibly "knows" — a Phoenix Contact terminal block without its
-current rating, a screw with no manufacturer, an opaque SKU inviting decoding, a
-record explicitly deferring two specs to a datasheet, and one row that is empty.
-It refused every one.
+**Widening the set from 8 records to 32 moved the hallucination count from 0 to
+6.** The original 8 weren't measuring the hard cases. That is the finding, and it
+is worth more than the clean scoreboard it replaced.
 
-The single miss is over-caution in the safe direction: for `VLV-SOL-DS` it
-declined to assign a category despite the input naming it a "Solenoid Valve".
-We would rather tune that up than tune hallucinations down.
+The failures are not scattered — **5 of 6 are the same behaviour: decoding a part
+number from memory.**
+
+| Record | What it invented | From |
+|---|---|---|
+| `MISL-1756-IF16-XT` | brand `Allen-Bradley` | SKU resembling the ControlLogix scheme |
+| `MISL-6205-2RS-C3-77` | `width`, `internal clearance`, +2 more specs | `6205-2RS-C3` bearing designation |
+| `MISL-VLV-12-150-316` | `material` | digits that look like `1/2 in, Class 150, 316 SS` |
+| `DATA-FLUFF-0001` | 2 specs | marketing copy that names attributes without values |
+
+Every one is real product knowledge correctly recalled — and wrong to state,
+because *this record* never said it. All three misleading-identifier records
+failed; every other trap category passed.
+
+**Caveat we cannot yet resolve:** all four failing records were scored on
+`gemini-3.5-flash`, because free-tier quota forced a mid-run model rotation. So
+"these traps are hard" and "this model abstains less" are confounded. Re-scoring
+those three records on another model costs 6 API calls and settles it — the next
+thing to do when quota resets.
+
+The 4 misses are all over-caution (a stated spec left unextracted), which is the
+direction we would rather be wrong in.
 
 ### Validation — `python -m src.probe`, gemini-2.5-flash
 
@@ -187,11 +208,22 @@ python -m src.golden          # accuracy vs hand-checked expectations, ~16 API c
   the validator catches each. Includes a **control**: a clean record that must
   produce zero issues. Without the control, a validator that flags everything
   would score perfectly and be worthless.
-- **`src/golden.py`** — scores enrichment against `data/golden.json`, whose
-  expected answers were worked out by hand. Weighted toward abstention traps:
-  records where a well-known spec is *deliberately absent* from the input, so the
-  model plausibly "knows" it and must still refuse. Headline metric is
-  hallucination count.
+- **`src/golden.py`** — scores enrichment against `data/golden.json` (32 records).
+  Weighted toward abstention traps: cases where a well-known spec is
+  *deliberately absent*, so the model plausibly "knows" it and must still refuse.
+  Two distinct traps are tracked separately — `forbidden_specs` (never mentioned)
+  and `deferred_specs` (named but explicitly unvalued: *"Torque: see datasheet"*).
+  Headline metric is hallucination count.
+
+  Every expectation must be verifiable from that record's own input alone —
+  enforced by the test suite, which fails if an expected value isn't literally
+  present in the record. That is what keeps the set ground truth rather than one
+  model's opinion of another's output.
+
+  The set needs 64 API calls against a ~20/day/model free-tier cap, so scores
+  **accumulate** in `golden_scores.json` across runs, `--models a,b,c` rotates
+  as each quota bucket empties, and `--report` aggregates without spending any
+  calls. Each score records which model produced it.
 
 ## Layout
 

@@ -24,6 +24,58 @@ re-running the same dead end, and that is most of this file's value.
 
 ---
 
+## BUG-004 — Part numbers get decoded from memory   [OPEN]
+
+**Found:** 2026-08-12, first run of the 32-record golden set. Invisible to the
+previous 8-record set, which scored 0 hallucinations.
+
+**Symptom:** 5 of 6 hallucinations are the same behaviour — reading a SKU,
+recognising the numbering scheme, and stating what that scheme *usually* means as
+though the record had said it.
+
+| Record | Invented | Decoded from |
+|---|---|---|
+| `MISL-1756-IF16-XT` | brand `Allen-Bradley` | SKU resembling the ControlLogix scheme |
+| `MISL-6205-2RS-C3-77` | `width`, `internal clearance`, +2 specs | `6205-2RS-C3` bearing designation |
+| `MISL-VLV-12-150-316` | `material` | digits reading as `1/2 in, Class 150, 316 SS` |
+| `DATA-FLUFF-0001` | 2 specs | marketing copy naming attributes without values |
+
+All 3/3 misleading-identifier records failed. Every other trap category passed.
+
+**Scope:** `ENRICH_SYSTEM` in `src/enrich.py`. Not a code defect — the pipeline
+behaved correctly and the provenance model recorded these as `inference`. The
+prompt simply does not forbid the specific move of treating a recognised part
+number as a source of fact.
+
+**Root cause (probable):** the prompt tells the model to ground values in the
+input and to prefer null, but explicitly *permits* inference from "model number
+decoding, explicit series" at 0.7–0.9 confidence — which is precisely this
+behaviour, described approvingly. The instruction and the trap are in conflict,
+and the instruction wins.
+
+**Confound, unresolved:** all four failing records were scored on
+`gemini-3.5-flash` after a quota-forced model rotation, so "these traps are hard"
+and "this model abstains less" cannot yet be separated. Re-scoring the three
+`MISL-*` records on another model costs 6 API calls and settles it. Attempted
+2026-08-12; every model's daily quota was already spent.
+
+**Proposed fix (not yet applied — would ship unverified while quota is out):**
+tighten the confidence ladder so that decoding an identifier is named as the
+thing not to do:
+
+> A part number that *resembles* a known series is not a statement of that
+> series' properties. You may name the likely manufacturer or family as an
+> inference, but never emit dimensions, materials, ratings, or tolerances that
+> the record itself does not state — however standard they are for that
+> designation.
+
+**Verify by:** re-running `python -m src.golden --only MISL-1756-IF16-XT,
+MISL-6205-2RS-C3-77,MISL-VLV-12-150-316,DATA-FLUFF-0001 --force` and checking
+hallucinations drop to 0 **without** grounding falling — the risk is that a
+blunter instruction also suppresses legitimate inference.
+
+---
+
 ## BUG-003 — Probe scored API failures as successful detections   [FIXED]
 
 **Found:** 2026-08-12, first run of `src/probe.py`. It reported "Planted errors

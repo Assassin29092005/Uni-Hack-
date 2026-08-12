@@ -6,3 +6,4 @@ catalog.db
 .env
 probe_result.txt
 golden_result.txt
+golden_scores.json

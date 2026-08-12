@@ -157,6 +157,68 @@ def test_unaudited_report_is_distinguishable():
         assert report.issues[0].suggested_confidence == 0.0
 
 
+def test_golden_set_is_structurally_valid():
+    """The golden set defines what 'correct' means, so a typo in it silently
+    skews every accuracy number rather than raising. Checks the parts that would
+    fail quietly: unknown core field names, duplicate SKUs, contradictory
+    expectations, and `values` targets that were never asked to be grounded."""
+    import json
+
+    cases = json.loads(Path("data/golden.json").read_text(encoding="utf-8"))
+    core = {"name", "brand", "category", "description"}
+    known_keys = {"grounded", "absent_core", "values", "required_specs",
+                  "forbidden_specs", "deferred_specs", "max_specs"}
+
+    skus = [c["sku"] for c in cases]
+    assert len(skus) == len(set(skus)), f"duplicate SKUs: {[s for s in skus if skus.count(s) > 1]}"
+
+    for case in cases:
+        sku, expect = case["sku"], case["expect"]
+        assert case.get("note"), f"{sku}: every record needs a note saying what it tests"
+        assert set(expect) <= known_keys, f"{sku}: unknown expectation key {set(expect) - known_keys}"
+
+        grounded = set(expect.get("grounded", []))
+        absent = set(expect.get("absent_core", []))
+        assert grounded <= core, f"{sku}: 'grounded' has non-core field {grounded - core}"
+        assert absent <= core, f"{sku}: 'absent_core' has non-core field {absent - core}"
+        # A field cannot be required to be both filled and refused.
+        assert not (grounded & absent), f"{sku}: {grounded & absent} both grounded and absent"
+
+        for field in expect.get("values", {}):
+            assert field in core, f"{sku}: 'values' targets non-core field {field!r}"
+            assert field not in absent, f"{sku}: {field!r} expected absent but has an expected value"
+
+        # The two hallucination traps are opposites and must not be confused:
+        #   forbidden_specs — attribute NEVER mentioned. Must be absent from the input.
+        #   deferred_specs  — attribute NAMED but explicitly unvalued ("Torque: see
+        #                     datasheet"). Must be PRESENT in the input, or it is
+        #                     really a forbidden spec and belongs in the other list.
+        # Getting these backwards penalises the model for reading correctly, or
+        # silently tests nothing.
+        haystack = " ".join([*case.get("attributes", {}), *case.get("attributes", {}).values(),
+                             case.get("text", "")]).lower()
+        for banned in expect.get("forbidden_specs", []):
+            assert banned.lower() not in haystack, (
+                f"{sku}: forbidden spec {banned!r} appears in the input — the model "
+                f"would be penalised for reading it correctly. Move it to deferred_specs.")
+        for deferred in expect.get("deferred_specs", []):
+            assert deferred.lower() in haystack, (
+                f"{sku}: deferred spec {deferred!r} does NOT appear in the input, so "
+                f"nothing defers it. Move it to forbidden_specs.")
+
+        # The cardinal rule: an expectation must be checkable by reading the input
+        # alone. If an expected value isn't in the record, verifying it needs
+        # outside product knowledge — and the golden set stops being ground truth.
+        for field, expected_value in expect.get("values", {}).items():
+            assert expected_value.lower() in haystack, (
+                f"{sku}: expected {field}={expected_value!r} but that string is not in "
+                f"the input — this expectation cannot be verified from the record alone")
+        for required in expect.get("required_specs", []):
+            assert required.lower() in haystack, (
+                f"{sku}: required spec {required!r} is not stated in the input, so "
+                f"demanding it would reward guessing")
+
+
 def test_ui_escapes_model_output():
     """Everything the UI renders — values, evidence, spec names — is LLM output.
     A product description containing a script tag must render as text, not run."""

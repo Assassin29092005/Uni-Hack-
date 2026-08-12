@@ -334,3 +334,83 @@ is visible in a terminal rather than a spinner.
 **Cost accepted:** No live "watch it enrich" moment in the browser — that has to
 be demoed from the CLI. Given the quota, running it live on stage was never the
 right plan anyway; pre-enriching and demoing the result is.
+
+---
+
+## 016 — Golden expectations must be verifiable from the input alone (2026-08-12)
+
+**Context:** Expanding the golden set from 8 to 32 records. Records were drafted
+with model assistance, which raises an obvious objection: if a model writes both
+the test and its expected answer, the "golden" set is just one model's opinion
+grading another's — the exact circularity this project exists to avoid.
+
+**Decision:** Every expectation must be checkable by reading that record's own
+`attributes` and `text` and asking *"is this stated here?"* — never by knowing
+real-world facts about the part. Enforced mechanically by
+`test_golden_set_is_structurally_valid`: every `values` string and every
+`required_specs` entry must appear verbatim in the input, or the test fails.
+
+**Why:** It makes correctness independent of who authored the record. A stranger
+with no industrial-products knowledge can audit the entire set. It also means
+the drafting process can be assisted without the result being model opinion —
+the assertions survive because they are mechanically grounded, not because we
+trust the drafter.
+
+**Cost accepted:** We cannot test whether the system knows real product facts
+(that a 6205 bearing has a 25mm bore). Fine: that is not what we are measuring.
+We measure whether it invents values the input doesn't support.
+
+---
+
+## 017 — `deferred_specs` is a distinct trap from `forbidden_specs` (2026-08-12)
+
+**Context:** `VLV-SOL-DS` says *"Torque: see datasheet"*. Torque was listed in
+`forbidden_specs`, but the word plainly appears in the input — so the structural
+test flagged it as a rule that would penalise the model for reading correctly.
+
+**Decision:** Two separate keys, with opposite structural requirements:
+
+| Key | The attribute is | Test asserts |
+|---|---|---|
+| `forbidden_specs` | never mentioned at all | string **absent** from input |
+| `deferred_specs` | named but explicitly unvalued | string **present** in input |
+
+Both score the same way — the spec must not come back grounded — but they test
+different failure modes and are validated in opposite directions.
+
+**Why:** Deferral is the subtler and more realistic trap: the attribute name is
+sitting right there in the text ("Weight: TBD", "Kv: refer to catalogue"),
+inviting the model to supply a plausible number for a field the supplier
+explicitly declined to fill. Real supplier data is full of these. Conflating
+them under one key meant either mis-encoding the deferral traps or, as the
+verify pass did, quietly dropping them — leaving the sharpest cases untested.
+
+**Cost accepted:** One more expectation key to explain. Cheap relative to a
+whole trap category going unmeasured.
+
+---
+
+## 018 — Golden scores accumulate and rotate across models (2026-08-12)
+
+**Context:** 32 records x 2 calls = 64 requests. The free tier allows ~20 per day
+**per model**. A 32-record set is therefore unrunnable in one sitting on one
+model — the set would be permanently unmeasurable as designed.
+
+**Decision:** Three mechanisms in `src/golden.py`:
+1. Scores cache to `golden_scores.json` after **each** record, so an interrupted
+   run keeps its work and a later run continues where it stopped.
+2. `--models a,b,c` rotates to the next model after two consecutive failures,
+   since quota is per-model.
+3. `--report` aggregates cached scores with **zero** API calls, and names every
+   model that contributed.
+
+**Why:** This is what made 28/32 records scoreable in a single session — one
+model alone reached 2. Caching per record rather than per run matters because
+quota death is the normal ending, not the exceptional one.
+
+**Cost accepted, and it is a real one:** a headline number can blend models.
+That is a genuine methodological weakness, mitigated only by reporting the mix
+rather than hiding it. It bit immediately — all four hallucinating records landed
+on one model, leaving "hard traps" and "weaker model" confounded (BUG-004). When
+quota allows, prefer scoring the whole set on one model and treat rotation as
+the fallback it is.

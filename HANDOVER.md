@@ -3,7 +3,7 @@
 **Read this first, every session.** State of the project right now — not history.
 Rewritten (not appended) at the end of every chat.
 
-Last updated: 2026-08-12 02:40 IST
+Last updated: 2026-08-12 12:40 IST
 
 ---
 
@@ -21,10 +21,19 @@ claim of the project holds on a free model.
 Repo is on GitHub: `github.com/Assassin29092005/Uni-Hack-`, branch `main`,
 one commit (`21a765e`, the docs). The code below is **committed nowhere yet**.
 
-**All 8 build-plan milestones are done and measured.** Headline numbers, all on
-the free tier: **0 hallucinations**, **28/28 abstention**, 96% grounding across 8
-hand-checked records; validator caught 5/5 planted faults with a clean control.
-Full write-up in `README.md` → Results.
+**All 8 build-plan milestones are done and measured.** Golden set widened 8 → 32
+records (24 traps); 28 scored so far.
+
+Current numbers, free tier: **97% grounding, 96% abstention, 100% on known
+values, 6 hallucinations.** Validator caught 5/5 planted faults with a clean
+control. Full write-up in `README.md` → Results.
+
+**The important result is BUG-004.** Widening the set took hallucinations from 0
+to 6, and 5 of the 6 are one behaviour: reading a part number, recognising the
+scheme, and stating what it usually means as if the record had said it. All 3/3
+misleading-identifier records failed; every other trap category passed. A prompt
+fix is drafted in `BUG.md` but **not applied** — applying it while quota is out
+would ship an unverified change to the most sensitive prompt in the project.
 
 ```
 src/models.py      schema — Sourced/Spec/Product/Issue/ValidationReport
@@ -86,20 +95,29 @@ Nothing mid-edit. The repo is in a consistent, runnable state.
 
 ## Next up
 
-Feature work is done. What remains is polish and preparation:
+**Everything below needs quota, which is exhausted across all models as of
+2026-08-12 12:40 IST. Resume after the daily reset.** In priority order:
 
-1. **Commit and push.** User is handling this.
-2. **Pre-enrich the demo database before presenting.** The free tier is ~10
-   records/day/model; do not run a cold batch on stage. The UI is read-only and
-   makes zero API calls, so a pre-populated `catalog.db` demos perfectly with
-   no quota risk at all.
-3. **Re-run `python -m src.probe` when quota resets** to get all six cases in a
-   single clean run. The results in README are correct but were assembled across
-   two runs (planted errors from one, control verified separately after the
-   fixture was fixed).
-4. Optional: tune the one over-caution miss — `VLV-SOL-DS` declined to assign a
-   category despite the input naming it a "Solenoid Valve".
-5. Optional: widen `data/golden.json` beyond 8 records.
+1. **Settle the BUG-004 confound — 6 API calls, do this first.** All four
+   hallucinating records were scored on `gemini-3.5-flash` after a quota-forced
+   rotation, so "these traps are hard" and "this model abstains less" are
+   confounded. Re-score on one other model:
+   `python -m src.golden --only MISL-1756-IF16-XT,MISL-6205-2RS-C3-77,MISL-VLV-12-150-316 --force`
+   This determines whether the fix is a prompt change or a model choice. Do not
+   apply the drafted prompt fix before knowing.
+2. **Score the last 4 records** (`CONT-PMP-DIA-77`, `RARE-HVAC-OBD-0455`,
+   `SPAR-EMPTY-0001`, `SPAR-WTONLY-4471`): just `python -m src.golden`, they're
+   skipped automatically as already-scored ones are.
+3. **Apply and verify the BUG-004 prompt fix** (drafted in `BUG.md`). Verify
+   hallucinations drop **without** grounding falling — a blunter instruction may
+   also suppress legitimate inference. Re-run the full set after.
+4. **Pre-enrich the demo database before presenting.** Do not run a cold batch on
+   stage. The UI is read-only and makes zero API calls, so a pre-populated
+   `catalog.db` demos with no quota risk.
+5. **Re-run `python -m src.probe`** for all six cases in one clean sweep — the
+   README results are correct but were assembled across two runs.
+6. Ideally, re-score the whole golden set on a **single** model, so the headline
+   number isn't blended (DECISIONS 018).
 
 ## Broken / known issues
 
@@ -108,12 +126,15 @@ Feature work is done. What remains is polish and preparation:
   per-model, so `GEMINI_MODEL=gemini-2.5-flash-lite` gets a fresh bucket when
   `gemini-2.5-flash` is spent — that is how the accuracy run completed at all.
   **`gemini-2.5-flash` quota was exhausted as of 2026-08-12 02:30 IST.**
-- Accuracy numbers come from `gemini-2.5-flash-lite`, the weaker model. Treat
-  them as a floor. Worth re-running on `gemini-2.5-flash` when quota resets.
-- Probe results were assembled across two runs, not one clean sweep (see Next up).
-- Evidence base is 8 golden records + 5 sample records. Good enough to make real
-  claims, not enough to call it validated at catalog scale.
-- One over-caution miss (`VLV-SOL-DS` category). Failing in the safe direction.
+- **BUG-004 open**: part numbers decoded from memory. 5 of 6 hallucinations.
+  Prompt fix drafted, deliberately not applied while it can't be verified.
+- **Headline accuracy blends 4 models** (quota rotation) — a real methodological
+  weakness, reported rather than hidden. See DECISIONS 018.
+- 4 of 32 records never scored; 28 is the current denominator.
+- Probe results were assembled across two runs, not one clean sweep.
+- 4 over-caution misses (a stated spec left unextracted). Safe direction.
+- Evidence base is now 32 golden records + 5 sample records. Enough to make real
+  claims; not enough to call it validated at catalog scale.
 - Free tiers throttle per *minute*, so worker defaults are 2 and a batch of 10
   takes minutes. Plan the demo around a pre-enriched database rather than a cold
   run on stage — the store is resumable precisely so this works.
