@@ -174,6 +174,38 @@ def identifier_decoded_specs(record: RawRecord, product: Product) -> list[Issue]
     return issues
 
 
+def brand_not_in_record(record: RawRecord, product: Product) -> list[Issue]:
+    """A brand the record never names is a decoded part number, not a finding.
+
+    The companion to `identifier_decoded_specs`, which is deliberately limited to
+    specs. Brand needed its own rule because it is the most expensive field to
+    get wrong — a wrong manufacturer on a live catalog page misroutes warranty
+    claims and returns — and because house brands and third-party parts copy
+    famous numbering schemes constantly, so "the SKU looks like Allen-Bradley's"
+    is evidence of nothing.
+
+    Only `inference` brands are checked. A brand copied from a column or quoted
+    from the text is grounded by definition, and `unsupported_input_claims`
+    already polices whether that claim is true.
+    """
+    brand = product.brand
+    if not brand.is_grounded or not brand.value or brand.source != "inference":
+        return []
+
+    haystack = _haystack(record).casefold()
+    # Match on the longest word so "3M" inside "3M 775L Stikit" counts, while a
+    # multi-word invention like "Allen-Bradley" has to appear as written.
+    needle = max(brand.value.split(), key=len, default="").casefold().strip(".,()")
+    if len(needle) >= 2 and needle in haystack:
+        return []
+
+    return [Issue(
+        field="brand", severity="unsupported",
+        detail=f"Brand {brand.value!r} appears nowhere in the record — inferred "
+               f"from the part number, which names no manufacturer.",
+        suggested_confidence=0.0)]
+
+
 def unit_problems(product: Product) -> list[Issue]:
     """Dimensioned quantities with the wrong unit family, or none at all.
 
@@ -231,14 +263,103 @@ def contradictory_specs(product: Product) -> list[Issue]:
     return issues
 
 
+# Unilog's hard limits for the delivery-format description variants:
+# (column, min chars or None, max chars or None, must be ALL CAPS).
+# A field that breaks these is rejected on format regardless of how good its
+# content is, so it is worth catching here — for free, every time — rather than
+# discovering it in a delivery review.
+DESCRIPTION_RULES = {
+    "INVOICE_DESC": (None, 40, True),
+    "MOBILE_DESC": (60, 80, False),
+}
+
+
+def description_format(product: Product) -> list[Issue]:
+    """Character limits and casing for the five description variants.
+
+    Purely mechanical, so the model is never asked to count its own characters —
+    something LLMs are famously unreliable at. It writes the text; arithmetic
+    stays here.
+    """
+    issues: list[Issue] = []
+    for column, field in product.delivery_descriptions.items():
+        if not field.value or column not in DESCRIPTION_RULES:
+            continue
+        low, high, caps = DESCRIPTION_RULES[column]
+        length = len(field.value)
+
+        if high is not None and length > high:
+            issues.append(Issue(
+                field=column, severity="unsupported",
+                detail=f"{column} is {length} characters; the limit is {high}.",
+                suggested_confidence=0.0))
+        elif low is not None and length < low:
+            # Under-length is a review flag, not a defect. A product whose
+            # manufacturer, brand, type and part number are all short words
+            # cannot reach 60 characters without padding, and padding is
+            # inventing — the exact thing this project refuses to do. So the
+            # value is still emitted, flagged for a human to extend from the
+            # manufacturer's own page. Confidence is left alone: the text is
+            # true, it is merely short.
+            issues.append(Issue(
+                field=column, severity="unsupported",
+                detail=f"{column} is {length} characters, under the {low} minimum — "
+                       f"needs a human to extend it from manufacturer copy "
+                       f"(padding it here would be invention).",
+                suggested_confidence=field.confidence))
+
+        if caps and field.value != field.value.upper():
+            issues.append(Issue(
+                field=column, severity="unsupported",
+                detail=f"{column} must be ALL CAPS.",
+                suggested_confidence=0.0))
+    return issues
+
+
+def classpath_depth(product: Product) -> list[Issue]:
+    """Classpath must be three levels: Dept > Class > Fine.
+
+    The exporter splits it into those three columns, so a two-level path leaves
+    `Fine` silently empty — a formatting failure that looks like missing data.
+    """
+    value = product.category.value
+    if not value or not product.category.is_grounded:
+        return []
+    levels = [part.strip() for part in value.split(">") if part.strip()]
+    if len(levels) == 3:
+        return []
+    return [Issue(
+        field="category", severity="unsupported",
+        detail=f"Classpath has {len(levels)} level(s), needs 3 "
+               f"(Dept > Class > Fine): {value!r}",
+        suggested_confidence=min(product.category.confidence, 0.4))]
+
+
 def run_checks(record: RawRecord, product: Product) -> list[Issue]:
     """Every deterministic rule, in one list. No model calls, no network."""
     return [
         *unsupported_input_claims(record, product),
         *identifier_decoded_specs(record, product),
+        *brand_not_in_record(record, product),
         *unit_problems(product),
         *contradictory_specs(product),
     ]
+
+
+def delivery_checks(product: Product) -> list[Issue]:
+    """Delivery-format compliance — deliberately NOT part of `run_checks`.
+
+    These ask "is this written the way Unilog requires?", which is a different
+    question from "is this value true?". Folding them into `run_checks` would
+    push format findings through `apply_report`, downgrading the confidence of a
+    perfectly well-grounded category because its Classpath has two levels — and
+    that would silently move the grounding and abstention numbers the golden
+    baseline is measured on.
+
+    So format compliance is reported on its own axis, which is also the
+    "character-limit compliance" metric the brief asks submissions to show.
+    """
+    return [*description_format(product), *classpath_depth(product)]
 
 
 def merge(record: RawRecord, product: Product, report):

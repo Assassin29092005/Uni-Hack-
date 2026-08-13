@@ -54,6 +54,18 @@ class Sourced(BaseModel):
         return self.value is not None and self.confidence >= CONFIDENCE_FLOOR
 
 
+def not_generated(field: str) -> Sourced:
+    """An explicitly-absent value, for a field no run has produced yet.
+
+    Confidence 0.0 keeps it below the floor, so it is never emitted and never
+    counted as grounded. The reason is spelled out in `evidence` rather than
+    left blank, because "the pipeline never generated this" and "the record did
+    not support it" are different facts and a reviewer needs to tell them apart.
+    """
+    return Sourced(value=None, source="input", confidence=0.0,
+                   evidence=f"Not generated: this catalog record predates the {field} field.")
+
+
 class Spec(Sourced):
     """A technical attribute. Same provenance contract, plus a name.
 
@@ -70,6 +82,12 @@ class RawRecord(BaseModel):
     sku: str
     attributes: dict[str, str] = Field(default_factory=dict)
     text: str = Field(default="", description="Free-text blob: description, datasheet excerpt, etc.")
+    # The source row exactly as read, before aliasing or placeholder stripping.
+    # The delivery format passes several distributor columns straight through,
+    # and they must survive verbatim — normalization is for what we reason over,
+    # not for what we hand back. Excluded from `as_prompt_block`, so the model
+    # still only ever sees the cleaned view.
+    raw: dict[str, str] = Field(default_factory=dict)
 
     def as_prompt_block(self) -> str:
         """Flatten to the text we actually show the model. Kept here so the
@@ -87,11 +105,41 @@ class Product(BaseModel):
     # See the note on Sourced: closed-object markers are added per provider.
 
     sku: str = Field(description="Copy the SKU through unchanged.")
-    name: Sourced = Field(description="Commercial product name.")
+    name: Sourced = Field(description="Item type only, e.g. 'Dishwasher', 'Ball Bearing'.")
     brand: Sourced = Field(description="Manufacturer or brand.")
-    category: Sourced = Field(description="Industrial product category.")
-    description: Sourced = Field(description="2-3 sentence commerce-ready description.")
+    category: Sourced = Field(
+        description="Classpath, three levels separated by ' > ', "
+                    "e.g. 'Appliances & Consumer Electronics > Kitchen Appliances > Built-In Dishwashers'.")
+    description: Sourced = Field(description="Long description. Full sentence-case detail.")
     specs: list[Spec] = Field(description="Technical attributes. Only what you can ground.")
+
+    # --- the delivery format's five description variants -------------------
+    # Unilog rewrites the same product at five lengths and casings — till
+    # receipt, mobile app, search result, product page, marketing copy. The
+    # brief calls getting these right "most of the task", and each has its own
+    # hard rule, so they are separate fields with separate evidence rather than
+    # one description the exporter truncates. Truncating would produce text that
+    # is the right length and the wrong sentence.
+    # Defaulted rather than required, for one practical reason: records enriched
+    # before these fields existed must still load. A schema change that bricks
+    # the demo catalog is a worse failure than a variant the model skipped, and
+    # the prompt asks for all five explicitly either way.
+    invoice_desc: Sourced = Field(
+        default_factory=lambda: not_generated("invoice_desc"),
+        description="<=40 chars, ALL CAPS, abbreviated. e.g. "
+                    "'DISHWASHER LEG 5 SST 120V 15A 50-1/4IN'. Null if not derivable.")
+    mobile_desc: Sourced = Field(
+        default_factory=lambda: not_generated("mobile_desc"),
+        description="60-80 chars. 'Manufacturer Brand, Item Type, Series, MPN'. "
+                    "Null if not derivable.")
+    short_desc: Sourced = Field(
+        default_factory=lambda: not_generated("short_desc"),
+        description="Product title: Brand + Series + MPN + Item Type + key attributes. "
+                    "Null if not derivable.")
+    retail_desc: Sourced = Field(
+        default_factory=lambda: not_generated("retail_desc"),
+        description="Shopper-facing title, no brand/MPN. e.g. "
+                    "'Professional Series Dishwasher, Leg Mounting, 5-Wash Cycle'. Null if not derivable.")
 
     # --- derived, never requested from the model ---------------------------
     # These are @property rather than pydantic fields on purpose: properties are
@@ -100,7 +148,22 @@ class Product(BaseModel):
 
     @property
     def core_fields(self) -> list[Sourced]:
+        # Deliberately still the original four. The delivery-format description
+        # variants are additional output, not additional *core* content, and
+        # folding them in here would silently redefine `completeness` — making
+        # the 32-record golden baseline incomparable with everything after it.
         return [self.name, self.brand, self.category, self.description]
+
+    @property
+    def delivery_descriptions(self) -> dict[str, Sourced]:
+        """The five description variants, keyed by their delivery column."""
+        return {
+            "INVOICE_DESC": self.invoice_desc,
+            "MOBILE_DESC": self.mobile_desc,
+            "SHORT_DESC": self.short_desc,
+            "RETAIL_DESC": self.retail_desc,
+            "LONG_DESC1": self.description,
+        }
 
     @property
     def completeness(self) -> float:

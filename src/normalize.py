@@ -20,6 +20,22 @@ import re
 # Attribute-name synonyms seen across supplier CSVs and scraped tables.
 # Left side is lowercased and punctuation-stripped before lookup.
 ATTRIBUTE_ALIASES = {
+    # --- Unilog delivery-format columns (the shipped input schema) ---------
+    "mfg part num": "sku",
+    "manufacturer part number": "sku",
+    "part desc": "description",
+    # The three brand columns are usually the sentinels "-- Unbranded --" etc.,
+    # stripped by `is_placeholder` before they ever reach the model.
+    "e1 brand": "brand",
+    "unilog brand": "brand",
+    "dib brand": "brand",
+    # Part_Manuf is the DEALER, not the manufacturer — the sample delivery row
+    # pairs Part_Manuf "Appliance Dealers Cooperative (APPDE)" with
+    # MANUFACTURER_NAME "Rheem Manufacturing". Aliasing it to brand would hand
+    # the model a confident wrong answer, so it stays a separate field.
+    "part manuf": "supplier",
+    "part manufacturer": "supplier",
+    # ----------------------------------------------------------------------
     "mfr": "brand",
     "mfg": "brand",
     "manufacturer": "brand",
@@ -104,8 +120,36 @@ def normalize_value(value: str) -> str:
     if not match:
         return text
     number, unit = match.groups()
+    # Only split when the trailing token is a unit we actually recognise.
+    # Without this guard the pattern "digits then letters" swallows things that
+    # merely look like quantities: the abrasive series "775L" became "775 L",
+    # and a model number like "6205C3" would split too. An unknown suffix is far
+    # more likely to be part of a code than a unit we forgot to list.
+    if unit.strip().lower().rstrip(".") not in UNIT_ALIASES:
+        return text
     number = re.sub(r"\s*[-–x×]\s*", "-", number)  # "10 - 30" -> "10-30"
     return f"{number} {normalize_unit(unit)}".strip()
+
+
+# Supplier exports use sentinel strings to mean "this field is empty". They are
+# NOT values: left in place, "-- Unbranded --" becomes a brand name, and the
+# model then dutifully describes a product made by Unbranded. The Unilog brief
+# is explicit — "Placeholders are not data ... Filter them out before training,
+# matching or prompting."
+#
+# Matched after casefolding and stripping punctuation/whitespace, because the
+# same sentinel appears as "-- Unbranded --", "--UNBRANDED--", and "Unbranded".
+PLACEHOLDER_VALUES = {
+    "unbranded", "no unilog brand", "no dib brand", "no brand",
+    "n/a", "na", "none", "null", "nil", "tbd", "unknown", "unspecified",
+    "not applicable", "not available", "no data", "-", "--", "---",
+}
+
+
+def is_placeholder(value: str) -> bool:
+    """True when a cell says 'empty' in words rather than being empty."""
+    stripped = re.sub(r"[\s\-–—_.*]+", " ", str(value or "").casefold()).strip()
+    return stripped in PLACEHOLDER_VALUES or stripped == ""
 
 
 def normalize_record(sku: str, attributes: dict[str, str], text: str = "") -> "RawRecord":
@@ -121,6 +165,8 @@ def normalize_record(sku: str, attributes: dict[str, str], text: str = "") -> "R
     for key, value in attributes.items():
         if value is None or not str(value).strip():
             continue
+        if is_placeholder(value):
+            continue  # sentinel meaning "empty" — must never reach the prompt
         canonical = normalize_key(key)
         if canonical in ("sku", ""):
             continue  # SKU is passed separately; blank keys are export artifacts

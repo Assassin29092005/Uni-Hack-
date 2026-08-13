@@ -512,3 +512,76 @@ actually came from. The seed file must come from a real run.
 real `enriched_at` and gains one extra audit row saying it arrived by import.
 Stamping imported data as freshly enriched would make the audit trail lie about
 when — and an audit trail that lies about when is barely better than none.
+
+
+---
+
+## 022 — The delivery CSV is a fixed contract; provenance ships beside it (2026-08-14)
+
+**Context:** Unilog supplied a 252-column Expected Output sheet with the
+instruction "Please do not change or modify the headers." Our entire
+differentiator — evidence, source, confidence per field — has nowhere to live in
+that schema.
+
+**Decision:** `src/delivery.py` writes their 252 columns byte-exactly, loaded
+from `data/delivery_headers.json` captured verbatim from their file. Every run
+also writes `<out>.provenance.csv`: one row per value with its source, evidence,
+confidence, and a `needs_review` flag — including the refusals.
+
+**Why:** Dropping provenance to fit the schema would discard the thing the
+Solution Guide explicitly calls "a genuinely valuable feature" ("a confidence
+score or a 'needs human review' flag"). Adding columns would break an explicit
+instruction and risk the submission on a formatting technicality. A sidecar
+satisfies both. A test asserts our header list still equals their file exactly,
+so drift fails loudly rather than at judging time.
+
+**Cost accepted:** Two files instead of one, and a reviewer has to join them on
+`Mfg_Part_Num` to see the evidence for a given cell.
+
+---
+
+## 023 — Placeholders are empty; the dealer is not the manufacturer (2026-08-14)
+
+**Context:** The real input is 6 columns. Three are brand fields that almost
+always contain sentinels — `-- Unbranded --`, `-- No Unilog Brand --`,
+`-- No DIB Brand --`. A fourth, `Part_Manuf`, holds a distributor.
+
+**Decision:** `normalize.is_placeholder` strips sentinels before anything
+reaches the prompt, and `Part_Manuf` maps to `supplier`, never to `brand`.
+
+**Why:** Both are traps that produce confident wrong answers rather than errors.
+Left in, "-- Unbranded --" becomes a brand and the model describes a product
+made by a company called Unbranded — the guide is explicit that "Placeholders
+are not data". And the supplied delivery row pairs `Part_Manuf` "Appliance
+Dealers Cooperative (APPDE)" with `MANUFACTURER_NAME` "Rheem Manufacturing":
+aliasing the dealer to brand would hand the model a plausible falsehood as
+though it were input, which is the one input our grounding rules cannot defend
+against — they check that a value came from the record, not that the record was
+right.
+
+**Cost accepted:** The placeholder list is hand-maintained and will miss
+sentinels we have not seen. It fails safe: an unrecognised sentinel is treated
+as a real value and gets flagged by the validator instead.
+
+---
+
+## 024 — Format compliance is scored separately from content validity (2026-08-14)
+
+**Context:** Adding Unilog's hard rules (INVOICE_DESC <=40 chars and ALL CAPS,
+MOBILE_DESC 60-80, Classpath exactly 3 levels) as deterministic checks. The
+obvious move is to add them to `checks.run_checks` alongside the existing rules.
+
+**Decision:** They live in a separate `checks.delivery_checks`, called by the
+exporter. `run_checks` — which feeds `apply_report` and therefore confidence —
+does not include them.
+
+**Why:** "Is this value true?" and "is it written the way Unilog requires?" are
+different questions. Folding them together would downgrade the confidence of a
+perfectly well-grounded category because its Classpath had two levels, which
+would move the grounding and abstention numbers the 32-record golden baseline is
+measured on — silently making every future run incomparable with it. Keeping
+them apart also produces the "character-limit compliance" metric the brief asks
+submissions to show, as its own number.
+
+**Cost accepted:** Two check entry points to remember. The exporter prints
+format compliance on every run so it cannot be forgotten.

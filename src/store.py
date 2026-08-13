@@ -26,6 +26,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS products (
     sku             TEXT PRIMARY KEY,
     data            TEXT NOT NULL,   -- full Product JSON, provenance included
+    raw             TEXT,            -- the input row verbatim, as JSON
     completeness    REAL NOT NULL,
     mean_confidence REAL NOT NULL,
     verdict         TEXT NOT NULL,
@@ -60,6 +61,12 @@ def connect(path: Path | str | None = None) -> sqlite3.Connection:
     conn = sqlite3.connect(str(path or DB_PATH))
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
+    # `CREATE TABLE IF NOT EXISTS` leaves an existing table alone, so a database
+    # created before `raw` existed keeps the old shape and the exporter breaks.
+    # Add the column in place rather than making the user delete their catalog.
+    if "raw" not in {row["name"] for row in conn.execute("PRAGMA table_info(products)")}:
+        conn.execute("ALTER TABLE products ADD COLUMN raw TEXT")
+        conn.commit()
     return conn
 
 
@@ -75,28 +82,34 @@ def is_done(conn: sqlite3.Connection, sku: str) -> bool:
 
 
 def save(conn: sqlite3.Connection, product: Product, report: ValidationReport,
-         at: str | None = None) -> None:
+         at: str | None = None, raw: dict | None = None) -> None:
     """Upsert the record and append its audit rows. One transaction, so a record
     can never end up persisted without the trail that explains it.
 
     `at` overrides the timestamp, and exists only for `seed`: importing a catalog
     that was enriched last Tuesday must not stamp every record as enriched now.
     An audit trail that lies about when is barely better than no audit trail.
+
+    `raw` is the input row verbatim. The delivery format passes several of the
+    distributor's own columns straight through, and re-deriving them from the
+    enriched record would risk "improving" a customer's part number.
     """
     at = at or _now()
     with conn:  # commits on success, rolls back on exception
         conn.execute(
             """INSERT INTO products
-                   (sku, data, completeness, mean_confidence, verdict, issue_count, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)
+                   (sku, data, raw, completeness, mean_confidence, verdict, issue_count, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(sku) DO UPDATE SET
                    data=excluded.data,
+                   raw=COALESCE(excluded.raw, products.raw),
                    completeness=excluded.completeness,
                    mean_confidence=excluded.mean_confidence,
                    verdict=excluded.verdict,
                    issue_count=excluded.issue_count,
                    updated_at=excluded.updated_at""",
-            (product.sku, product.model_dump_json(), product.completeness,
+            (product.sku, product.model_dump_json(),
+             json.dumps(raw) if raw else None, product.completeness,
              product.mean_confidence, report.verdict, len(report.issues), at),
         )
         conn.executemany(

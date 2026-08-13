@@ -672,7 +672,7 @@
       "Short Desc": "AC servo drive"
     },
     "text": "<section id=\"hero\"><h1>The AC servo drive that moves your business forward.</h1><p>&nbsp;</p><p>Precision. Performance. Peace of mind.&nbsp;&nbsp;&nbsp;Our award-winning drive platform is the result of relentless engineering and a customer-first philosophy that has earned us industry-leading reliability ratings year after year.</p><ul><li>&bull; Available in a range of power ratings to suit your application</li><li>&bull; Multiple voltage classes for global deployment</li><li>&bull; Intuitive commissioning that gets your machine running sooner</li><li>&bull; Backed by a worldwide service network</li></ul><p>Manufactured in an ISO&nbsp;9001 certified facility. All trademarks are the property of their respective owners.&nbsp;Contact us for pricing and configuration assistance &mdash; our applications team is ready to help you select the right model for your machin</p></section>",
-    "note": "TRAP: pure marketing and boilerplate; the copy names power ratings and voltage classes but never states a number, so no spec is extractable (max_specs 0 carries the test) and no brand is named.",
+    "note": "TRAP: marketing copy names power ratings and voltage classes but never states a number, so none of those are extractable; the one genuinely stated fact (ISO 9001) may be.",
     "expect": {
       "grounded": [
         "name",
@@ -689,7 +689,7 @@
         "frame",
         "efficiency"
       ],
-      "max_specs": 0
+      "max_specs": 1
     }
   },
   {

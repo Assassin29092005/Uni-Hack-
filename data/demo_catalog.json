@@ -1,0 +1,1433 @@
+[
+  {
+    "sku": "3MABR-7100045865",
+    "product": {
+      "sku": "3MABR-7100045865",
+      "name": {
+        "value": "Sanding Disc",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Input text mentions 'Stikit Film P120 - Cubitron II 50 Disc/Box', which describes an abrasive sanding disc.",
+        "confidence": 0.85
+      },
+      "brand": {
+        "value": "3M",
+        "unit": null,
+        "source": "input",
+        "evidence": "Input free text explicitly states '3M 775L Stikit Film'.",
+        "confidence": 1.0
+      },
+      "category": {
+        "value": "Abrasives > Coated Abrasives > Sanding Discs",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Input describes a 3M Stikit Film Cubitron II disc, placing it in Coated Abrasives sanding discs.",
+        "confidence": 0.8
+      },
+      "description": {
+        "value": "3M 775L Stikit Film abrasive disc featuring Cubitron II grain in P120 grit. Supplied as 50 discs per box.",
+        "unit": null,
+        "source": "input",
+        "evidence": "Constructed from input text '3M 775L Stikit Film P120 - Cubitron II 50 Disc/Box'.",
+        "confidence": 0.95
+      },
+      "specs": [
+        {
+          "value": "P120",
+          "unit": null,
+          "source": "input",
+          "evidence": "Stated as 'P120' in the input text.",
+          "confidence": 1.0,
+          "name": "grit size"
+        },
+        {
+          "value": "50",
+          "unit": null,
+          "source": "input",
+          "evidence": "Stated as '50 Disc/Box' in the input text.",
+          "confidence": 1.0,
+          "name": "quantity per box"
+        }
+      ],
+      "invoice_desc": {
+        "value": "3M 775L STIKIT DISC P120 50/BOX",
+        "unit": null,
+        "source": "input",
+        "evidence": "Abbreviated from input text for invoice limits.",
+        "confidence": 0.9
+      },
+      "mobile_desc": {
+        "value": "3M Sanding Disc 775L Stikit Film P120 3MABR-7100045865",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Composed of brand, item type, series, MPN, and attributes within the mobile character length constraints.",
+        "confidence": 0.85
+      },
+      "short_desc": {
+        "value": "3M 775L 3MABR-7100045865 Sanding Disc P120 Cubitron II",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Follows Brand + Series + MPN + Item Type + key attributes structure.",
+        "confidence": 0.9
+      },
+      "retail_desc": {
+        "value": "Cubitron II Film Sanding Disc, P120 Grit, 50-Disc Box",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Shopper-facing description without brand or part number.",
+        "confidence": 0.85
+      }
+    },
+    "report": {
+      "issues": [],
+      "verdict": "pass"
+    },
+    "enriched_at": "2026-08-13T20:28:09+00:00"
+  },
+  {
+    "sku": "3MABR-7100048736",
+    "product": {
+      "sku": "3MABR-7100048736",
+      "name": {
+        "value": "Sanding Disc",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Free text states '775L Stikit Film P80 - Cubitron II 50 Disc/Box', making it a sanding disc.",
+        "confidence": 0.8
+      },
+      "brand": {
+        "value": "3M",
+        "unit": null,
+        "source": "input",
+        "evidence": "Free text starts with '3M 775L Stikit Film'.",
+        "confidence": 1.0
+      },
+      "category": {
+        "value": "Abrasives > Coated Abrasives > Sanding Discs",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Stikit Film Discs are coated abrasives categorized as sanding discs.",
+        "confidence": 0.8
+      },
+      "description": {
+        "value": "3M Stikit film disc featuring Cubitron II grain in P80 grit, series 775L. Supplied in a box of 50 discs.",
+        "unit": null,
+        "source": "input",
+        "evidence": "Derived directly from '3M 775L Stikit Film P80 - Cubitron II 50 Disc/Box'.",
+        "confidence": 0.9
+      },
+      "specs": [
+        {
+          "value": "P80",
+          "unit": null,
+          "source": "input",
+          "evidence": "Free text contains 'P80'.",
+          "confidence": 1.0,
+          "name": "grit"
+        },
+        {
+          "value": "50",
+          "unit": null,
+          "source": "input",
+          "evidence": "Free text contains '50 Disc/Box'.",
+          "confidence": 1.0,
+          "name": "quantity per box"
+        }
+      ],
+      "invoice_desc": {
+        "value": "3M 775L STIKIT DISC P80 50/BOX",
+        "unit": null,
+        "source": "input",
+        "evidence": "Abbreviated from free text to fit <=40 characters in ALL CAPS.",
+        "confidence": 0.9
+      },
+      "mobile_desc": {
+        "value": "3M Sanding Disc 775L Cubitron II 3MABR-7100048736",
+        "unit": null,
+        "source": "input",
+        "evidence": "Constructed from brand, item type, series, and MPN.",
+        "confidence": 0.9
+      },
+      "short_desc": {
+        "value": "3M 775L 3MABR-7100048736 Sanding Disc Cubitron II P80",
+        "unit": null,
+        "source": "input",
+        "evidence": "Ordered per spec: Brand + Series + MPN + Item Type + key attributes.",
+        "confidence": 0.9
+      },
+      "retail_desc": {
+        "value": "Cubitron II Film Sanding Disc, P80 Grit, 50-Pack",
+        "unit": null,
+        "source": "input",
+        "evidence": "Shopper-facing description excluding brand and part number.",
+        "confidence": 0.9
+      }
+    },
+    "report": {
+      "issues": [],
+      "verdict": "pass"
+    },
+    "enriched_at": "2026-08-13T20:28:09+00:00"
+  },
+  {
+    "sku": "3MABR-7100075678",
+    "product": {
+      "sku": "3MABR-7100075678",
+      "name": {
+        "value": "Sanding Disc",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Free text states '775L Stikit Film P150 - Cubitron II 50 Disc/Box', which describes coated abrasive film discs.",
+        "confidence": 0.8
+      },
+      "brand": {
+        "value": "3M",
+        "unit": null,
+        "source": "input",
+        "evidence": "Free text explicitly states '3M 775L Stikit Film P150'.",
+        "confidence": 1.0
+      },
+      "category": {
+        "value": "Abrasives > Coated Abrasives > Sanding Discs",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Product is a 3M Cubitron II Stikit film disc, placing it in the abrasive discs category.",
+        "confidence": 0.85
+      },
+      "description": {
+        "value": "3M 775L Stikit Film sanding disc featuring Cubitron II abrasive grain in P150 grit. Supplied in a box containing 50 discs.",
+        "unit": null,
+        "source": "input",
+        "evidence": "Constructed directly from free text '3M 775L Stikit Film P150 - Cubitron II 50 Disc/Box'.",
+        "confidence": 0.95
+      },
+      "specs": [
+        {
+          "value": "P150",
+          "unit": null,
+          "source": "input",
+          "evidence": "Free text states 'P150'.",
+          "confidence": 1.0,
+          "name": "grit size"
+        },
+        {
+          "value": "50",
+          "unit": null,
+          "source": "input",
+          "evidence": "Free text states '50 Disc/Box'.",
+          "confidence": 1.0,
+          "name": "quantity per box"
+        },
+        {
+          "value": "775L",
+          "unit": null,
+          "source": "input",
+          "evidence": "Free text states '775L'.",
+          "confidence": 1.0,
+          "name": "series"
+        }
+      ],
+      "invoice_desc": {
+        "value": "3M 775L STIKIT DISC P150 50/BOX",
+        "unit": null,
+        "source": "input",
+        "evidence": "Abbreviated from input text to fit within character limits.",
+        "confidence": 0.9
+      },
+      "mobile_desc": {
+        "value": "3M Sanding Disc 775L 3MABR-7100075678",
+        "unit": null,
+        "source": "input",
+        "evidence": "Constructed from brand, item type, series, and SKU.",
+        "confidence": 0.9
+      },
+      "short_desc": {
+        "value": "3M 775L 3MABR-7100075678 Sanding Disc P150 Cubitron II",
+        "unit": null,
+        "source": "input",
+        "evidence": "Follows the required short description order of Brand + Series + MPN + Item Type + key attributes.",
+        "confidence": 0.9
+      },
+      "retail_desc": {
+        "value": "Professional Series Film Sanding Disc, P150 Grit, Cubitron II Abrasive, 50-Disc Box",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Constructed without brand and part number, utilizing input details.",
+        "confidence": 0.85
+      }
+    },
+    "report": {
+      "issues": [],
+      "verdict": "pass"
+    },
+    "enriched_at": "2026-08-13T20:28:09+00:00"
+  },
+  {
+    "sku": "3MABR-7100075690",
+    "product": {
+      "sku": "3MABR-7100075690",
+      "name": {
+        "value": "Sanding Disc",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Free text states '3M 775L Stikit Film P180 - Cubitron II 50 Disc/Box', which describes a coated abrasive sanding disc.",
+        "confidence": 0.8
+      },
+      "brand": {
+        "value": "3M",
+        "unit": null,
+        "source": "input",
+        "evidence": "Brand '3M' is explicitly named in the free text '3M 775L Stikit Film P180'.",
+        "confidence": 1.0
+      },
+      "category": {
+        "value": "Abrasives > Coated Abrasives > Sanding Discs",
+        "unit": null,
+        "source": "inference",
+        "evidence": "The item is a Stikit Film disc abrasive product.",
+        "confidence": 0.7
+      },
+      "description": {
+        "value": "3M 775L Stikit Film abrasive disc featuring Cubitron II grain in P180 grit. Supplied as 50 discs per box.",
+        "unit": null,
+        "source": "input",
+        "evidence": "Synthesized directly from the free text '3M 775L Stikit Film P180 - Cubitron II 50 Disc/Box'.",
+        "confidence": 0.9
+      },
+      "specs": [
+        {
+          "value": "P180",
+          "unit": null,
+          "source": "input",
+          "evidence": "Stated as 'P180' in the free text.",
+          "confidence": 1.0,
+          "name": "grit"
+        },
+        {
+          "value": "50",
+          "unit": null,
+          "source": "input",
+          "evidence": "Stated as '50 Disc/Box' in the free text.",
+          "confidence": 1.0,
+          "name": "quantity per box"
+        }
+      ],
+      "invoice_desc": {
+        "value": "3M 775L STIKIT DISC P180 50/BOX",
+        "unit": null,
+        "source": "input",
+        "evidence": "Constructed from input text within 40 character limit.",
+        "confidence": 0.9
+      },
+      "mobile_desc": {
+        "value": "3M Sanding Disc 775L 3MABR-7100075690",
+        "unit": null,
+        "source": "input",
+        "evidence": "Constructed following the format: Manufacturer Brand, Item Type, Series, MPN.",
+        "confidence": 0.8
+      },
+      "short_desc": {
+        "value": "3M 775L 3MABR-7100075690 Sanding Disc P180 Cubitron II",
+        "unit": null,
+        "source": "input",
+        "evidence": "Constructed following the format: Brand + Series + MPN + Item Type + key attributes.",
+        "confidence": 0.8
+      },
+      "retail_desc": {
+        "value": "Film Stikit Sanding Disc with Cubitron II abrasive grain, P180 grit, 50-disc box",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Shopper-facing description avoiding brand and MPN based on input details.",
+        "confidence": 0.8
+      }
+    },
+    "report": {
+      "issues": [],
+      "verdict": "pass"
+    },
+    "enriched_at": "2026-08-13T20:28:09+00:00"
+  },
+  {
+    "sku": "3MABR-7100075692",
+    "product": {
+      "sku": "3MABR-7100075692",
+      "name": {
+        "value": "Sanding Disc",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Input text mentions '775L Stikit Film P220 - Cubitron II 50 Disc/Box', which describes abrasive film sanding discs.",
+        "confidence": 0.8
+      },
+      "brand": {
+        "value": "3M",
+        "unit": null,
+        "source": "input",
+        "evidence": "Mentioned in input text as '3M 775L Stikit Film'.",
+        "confidence": 1.0
+      },
+      "category": {
+        "value": "Abrasives > Coated Abrasives > Sanding Discs",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Input text '775L Stikit Film P220 - Cubitron II 50 Disc/Box' clearly places the product in coated abrasives as a sanding disc.",
+        "confidence": 0.8
+      },
+      "description": {
+        "value": "3M 775L Stikit film sanding disc featuring Cubitron II abrasive grain in P220 grit. Supplied in a box containing 50 discs.",
+        "unit": null,
+        "source": "input",
+        "evidence": "Constructed from input text '3M 775L Stikit Film P220 - Cubitron II 50 Disc/Box'.",
+        "confidence": 0.9
+      },
+      "specs": [
+        {
+          "value": "P220",
+          "unit": null,
+          "source": "input",
+          "evidence": "Stated as 'P220' in the input free text.",
+          "confidence": 1.0,
+          "name": "grit"
+        },
+        {
+          "value": "50",
+          "unit": null,
+          "source": "input",
+          "evidence": "Stated as '50 Disc/Box' in the input free text.",
+          "confidence": 1.0,
+          "name": "quantity per box"
+        }
+      ],
+      "invoice_desc": {
+        "value": "3M 775L STIKIT DISC P220 50/BOX",
+        "unit": null,
+        "source": "input",
+        "evidence": "Derived from input text adhering to character limit and abbreviations.",
+        "confidence": 0.9
+      },
+      "mobile_desc": {
+        "value": "3M Sanding Disc 775L 3MABR-7100075692",
+        "unit": null,
+        "source": "input",
+        "evidence": "Constructed following the mobile description formula using brand, item type, series, and MPN.",
+        "confidence": 0.8
+      },
+      "short_desc": {
+        "value": "3M 775L 3MABR-7100075692 Sanding Disc P220",
+        "unit": null,
+        "source": "input",
+        "evidence": "Constructed from brand, series, MPN, item type, and key attributes in the required order.",
+        "confidence": 0.9
+      },
+      "retail_desc": {
+        "value": "Cubitron II Film Sanding Disc with Stikit backing, P220 Grit, 50 Discs",
+        "unit": null,
+        "source": "input",
+        "evidence": "Built from product details without brand or part numbers per instructions.",
+        "confidence": 0.8
+      }
+    },
+    "report": {
+      "issues": [],
+      "verdict": "pass"
+    },
+    "enriched_at": "2026-08-13T20:28:09+00:00"
+  },
+  {
+    "sku": "3MABR-7100145365",
+    "product": {
+      "sku": "3MABR-7100145365",
+      "name": {
+        "value": "Sanding Disc",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Free text states '775L Stikit Film P320 - Cubitron II 50 Disc/Box', indicating a coated abrasive sanding disc.",
+        "confidence": 0.8
+      },
+      "brand": {
+        "value": "3M",
+        "unit": null,
+        "source": "input",
+        "evidence": "Free text explicitly states '3M 775L Stikit Film'",
+        "confidence": 1.0
+      },
+      "category": {
+        "value": "Abrasives > Coated Abrasives > Sanding Discs",
+        "unit": null,
+        "source": "inference",
+        "evidence": "The product is a 3M Stikit Film disc used for sanding.",
+        "confidence": 0.8
+      },
+      "description": {
+        "value": "3M 775L Stikit film sanding disc featuring Cubitron II abrasive grain in P320 grit. Supplied as 50 discs per box.",
+        "unit": null,
+        "source": "input",
+        "evidence": "Derived directly from input text '3M 775L Stikit Film P320 - Cubitron II 50 Disc/Box'",
+        "confidence": 0.95
+      },
+      "specs": [
+        {
+          "value": "P320",
+          "unit": null,
+          "source": "input",
+          "evidence": "Free text states 'P320'",
+          "confidence": 1.0,
+          "name": "grit size"
+        },
+        {
+          "value": "50",
+          "unit": null,
+          "source": "input",
+          "evidence": "Free text states '50 Disc/Box'",
+          "confidence": 1.0,
+          "name": "quantity per box"
+        },
+        {
+          "value": "775L",
+          "unit": null,
+          "source": "input",
+          "evidence": "Free text states '775L'",
+          "confidence": 1.0,
+          "name": "series"
+        }
+      ],
+      "invoice_desc": {
+        "value": "3M 775L STIKIT DISC P320 50/BOX",
+        "unit": null,
+        "source": "input",
+        "evidence": "Constructed from input text within character limits.",
+        "confidence": 0.9
+      },
+      "mobile_desc": {
+        "value": "3M Sanding Disc 775L 3MABR-7100145365",
+        "unit": null,
+        "source": "input",
+        "evidence": "Constructed from brand, item type, series, and MPN.",
+        "confidence": 0.9
+      },
+      "short_desc": {
+        "value": "3M 775L 3MABR-7100145365 Sanding Disc P320",
+        "unit": null,
+        "source": "input",
+        "evidence": "Constructed following brand + series + MPN + item type + attributes format.",
+        "confidence": 0.9
+      },
+      "retail_desc": {
+        "value": "Stikit Film Sanding Disc with Cubitron II Grain, P320 Grit, 50-Pack",
+        "unit": null,
+        "source": "input",
+        "evidence": "Shopper-facing description without brand or part number.",
+        "confidence": 0.85
+      }
+    },
+    "report": {
+      "issues": [],
+      "verdict": "pass"
+    },
+    "enriched_at": "2026-08-13T20:28:09+00:00"
+  },
+  {
+    "sku": "5B-332-080",
+    "product": {
+      "sku": "5B-332-080",
+      "name": {
+        "value": "Sanding Disc",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Hiolit 5\" P80 indicates an abrasive disc product.",
+        "confidence": 0.8
+      },
+      "brand": {
+        "value": "Mirka",
+        "unit": null,
+        "source": "input",
+        "evidence": "supplier: Mirka Abrasives Inc (MIRUS)",
+        "confidence": 1.0
+      },
+      "category": {
+        "value": "Abrasives > Coated Abrasives > Sanding Discs",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Hiolit abrasive product with diameter and grit size fits sanding discs.",
+        "confidence": 0.7
+      },
+      "description": {
+        "value": "Mirka Hiolit 5-inch P80 abrasive sanding disc, part number 5B-332-080.",
+        "unit": null,
+        "source": "input",
+        "evidence": "Constructed from input fields supplier Mirka, free text Hiolit 5\" P80, and SKU 5B-332-080.",
+        "confidence": 0.9
+      },
+      "specs": [
+        {
+          "value": "5",
+          "unit": "in",
+          "source": "input",
+          "evidence": "5\" from free text 5B-332-080 HIOLIT 5\" P80",
+          "confidence": 1.0,
+          "name": "diameter"
+        },
+        {
+          "value": "80",
+          "unit": null,
+          "source": "input",
+          "evidence": "P80 from free text 5B-332-080 HIOLIT 5\" P80",
+          "confidence": 1.0,
+          "name": "grit size"
+        }
+      ],
+      "invoice_desc": {
+        "value": "MIRKA 5B-332-080 HIOLIT DISC 5IN P80",
+        "unit": null,
+        "source": "input",
+        "evidence": "Built from supplier Mirka, SKU, series, and specs.",
+        "confidence": 0.9
+      },
+      "mobile_desc": {
+        "value": "Mirka Sanding Disc Hiolit 5B-332-080",
+        "unit": null,
+        "source": "input",
+        "evidence": "Built using brand, item type, series, and MPN.",
+        "confidence": 0.9
+      },
+      "short_desc": {
+        "value": "Mirka Hiolit 5B-332-080 Sanding Disc 5 in P80 Grit",
+        "unit": null,
+        "source": "input",
+        "evidence": "Built using brand, series, MPN, item type, and key attributes.",
+        "confidence": 0.9
+      },
+      "retail_desc": {
+        "value": "Hiolit Sanding Disc, 5-Inch, P80 Grit",
+        "unit": null,
+        "source": "input",
+        "evidence": "Built using series name and specs without brand or SKU.",
+        "confidence": 0.9
+      }
+    },
+    "report": {
+      "issues": [],
+      "verdict": "pass"
+    },
+    "enriched_at": "2026-08-13T20:28:09+00:00"
+  },
+  {
+    "sku": "5B-332-120",
+    "product": {
+      "sku": "5B-332-120",
+      "name": {
+        "value": "Sanding Disc",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Hiolit 5\" P120 is a coated abrasive product, specifically a sanding disc based on the diameter and grit designation.",
+        "confidence": 0.8
+      },
+      "brand": {
+        "value": "Mirka",
+        "unit": null,
+        "source": "input",
+        "evidence": "Supplier field states 'Mirka Abrasives Inc (MIRUS)'.",
+        "confidence": 1.0
+      },
+      "category": {
+        "value": "Abrasives > Coated Abrasives > Sanding Discs",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Hiolit series P120 is a coated abrasive disc by Mirka.",
+        "confidence": 0.8
+      },
+      "description": {
+        "value": "Mirka Hiolit abrasive sanding disc in 5 inch diameter with P120 grit.",
+        "unit": null,
+        "source": "input",
+        "evidence": "Derived from 'HIOLIT 5\" P120' and supplier Mirka Abrasives Inc. [flagged: Claims source 'input', but 55% of 'Mirka Hiolit abrasive sanding disc in 5 inch diameter with P120 grit.' does not appear in the record.]",
+        "confidence": 0.3
+      },
+      "specs": [
+        {
+          "value": "5",
+          "unit": "in",
+          "source": "input",
+          "evidence": "Free text states '5\"'.",
+          "confidence": 1.0,
+          "name": "diameter"
+        },
+        {
+          "value": "P120",
+          "unit": null,
+          "source": "input",
+          "evidence": "Free text states 'P120'.",
+          "confidence": 1.0,
+          "name": "grit size"
+        }
+      ],
+      "invoice_desc": {
+        "value": "MIRKA 5B-332-120 HIOLIT DISC 5IN P120",
+        "unit": null,
+        "source": "input",
+        "evidence": "Constructed from SKU, brand, and free text elements within 40 chars.",
+        "confidence": 0.9
+      },
+      "mobile_desc": {
+        "value": "Mirka Abrasives Inc Sanding Disc Hiolit 5B-332-120",
+        "unit": null,
+        "source": "input",
+        "evidence": "Combined brand, item type, series, and MPN within mobile character range.",
+        "confidence": 0.9
+      },
+      "short_desc": {
+        "value": "Mirka Hiolit 5B-332-120 Sanding Disc 5 in P120 Grit",
+        "unit": null,
+        "source": "input",
+        "evidence": "Brand + Series + MPN + Item Type + key attributes order strictly followed.",
+        "confidence": 0.9
+      },
+      "retail_desc": {
+        "value": "Professional Hiolit Series Sanding Disc, 5 Inch, P120 Grit",
+        "unit": null,
+        "source": "input",
+        "evidence": "Shopper-facing description without brand or part number.",
+        "confidence": 0.8
+      }
+    },
+    "report": {
+      "issues": [
+        {
+          "field": "description",
+          "severity": "unsupported",
+          "detail": "Claims source 'input', but 55% of 'Mirka Hiolit abrasive sanding disc in 5 inch diameter with P120 grit.' does not appear in the record.",
+          "suggested_confidence": 0.3
+        }
+      ],
+      "verdict": "revise"
+    },
+    "enriched_at": "2026-08-13T20:28:09+00:00"
+  },
+  {
+    "sku": "9A-570-240",
+    "product": {
+      "sku": "9A-570-240",
+      "name": {
+        "value": "Sanding Strip",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Free text states 'Abranet 2.75x30' which refers to Mirka Abranet abrasive mesh strips",
+        "confidence": 0.85
+      },
+      "brand": {
+        "value": "Mirka",
+        "unit": null,
+        "source": "input",
+        "evidence": "Supplier 'Mirka Abrasives Inc (MIRUS)' names the brand Mirka",
+        "confidence": 0.95
+      },
+      "category": {
+        "value": "Abrasives > Sanding Sheets & Strips > Abrasive Mesh",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Abranet is a mesh abrasive product line used for sanding",
+        "confidence": 0.8
+      },
+      "description": {
+        "value": "Mirka Abranet 2.75 in x 30 ft abrasive sanding strip. Mesh design provides dust-free sanding.",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Inferred from brand Mirka, product line Abranet, and dimensions 2.75x30 from input free text.",
+        "confidence": 0.75
+      },
+      "specs": [
+        {
+          "value": "2-3/4",
+          "unit": "in",
+          "source": "input",
+          "evidence": "Width dimension 2.75 from free text '2.75x30'",
+          "confidence": 0.9,
+          "name": "width"
+        },
+        {
+          "value": "30",
+          "unit": "ft",
+          "source": "input",
+          "evidence": "Length dimension 30 from free text '2.75x30'",
+          "confidence": 0.9,
+          "name": "length"
+        },
+        {
+          "value": "240",
+          "unit": null,
+          "source": "input",
+          "evidence": "Grit rating 240 derived from SKU ending -240",
+          "confidence": 0.8,
+          "name": "grit rating"
+        }
+      ],
+      "invoice_desc": {
+        "value": "MIRKA ABRANET 2-3/4IN X 30FT 240 GRIT",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Generated to fit <=40 chars ALL CAPS till receipt standard using grounded data.",
+        "confidence": 0.85
+      },
+      "mobile_desc": {
+        "value": "Mirka Abranet Sanding Strip 2.75x30 9A-570-240",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Built using brand, item type, series, and MPN within 60-80 chars.",
+        "confidence": 0.85
+      },
+      "short_desc": {
+        "value": "Mirka Abranet 9A-570-240 Sanding Strip 2-3/4 in x 30 ft 240 Grit",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Built following Brand + Series + MPN + Item Type + key attributes order.",
+        "confidence": 0.85
+      },
+      "retail_desc": {
+        "value": "Abranet Dust-Free Abrasive Sanding Strip, 2-3/4 in x 30 ft",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Shopper-facing description omitting brand and part number.",
+        "confidence": 0.8
+      }
+    },
+    "report": {
+      "issues": [],
+      "verdict": "pass"
+    },
+    "enriched_at": "2026-08-13T20:28:09+00:00"
+  },
+  {
+    "sku": "9A-570-320",
+    "product": {
+      "sku": "9A-570-320",
+      "name": {
+        "value": "Sanding Strip",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Free text describes 'Abranet 2.75x30', which are dimensions for a Mirka Abranet abrasive strip.",
+        "confidence": 0.8
+      },
+      "brand": {
+        "value": "Mirka",
+        "unit": null,
+        "source": "input",
+        "evidence": "Supplier is listed as 'Mirka Abrasives Inc (MIRUS)'.",
+        "confidence": 1.0
+      },
+      "category": {
+        "value": "Abrasives > Coated Abrasives > Sanding Sheets & Strips",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Mirka Abranet is a mesh abrasive product used for sanding, falling into coated abrasives.",
+        "confidence": 0.7
+      },
+      "description": {
+        "value": "Mirka Abranet abrasive strip measuring 2-3/4 in by 30 ft.",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Derived from supplier Mirka Abrasives Inc and free text dimensions 2.75x30.",
+        "confidence": 0.7
+      },
+      "specs": [
+        {
+          "value": "2-3/4",
+          "unit": "in",
+          "source": "input",
+          "evidence": "Width dimension from '2.75x30' in free text.",
+          "confidence": 0.9,
+          "name": "width"
+        },
+        {
+          "value": "30",
+          "unit": "ft",
+          "source": "input",
+          "evidence": "Length dimension from '2.75x30' in free text.",
+          "confidence": 0.9,
+          "name": "length"
+        }
+      ],
+      "invoice_desc": {
+        "value": "MIRKA ABRANET STRIP 2-3/4IN X 30FT",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Constructed from brand, item type, and dimensions within character limits.",
+        "confidence": 0.8
+      },
+      "mobile_desc": {
+        "value": "Mirka Sanding Strip Abranet 9A-570-320",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Combined manufacturer brand, item type, series, and MPN.",
+        "confidence": 0.8
+      },
+      "short_desc": {
+        "value": "Mirka Abranet 9A-570-320 Sanding Strip 2-3/4 in x 30 ft",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Structured using Brand + Series + MPN + Item Type + key attributes.",
+        "confidence": 0.8
+      },
+      "retail_desc": {
+        "value": "Professional Abranet Mesh Sanding Strip, 2-3/4 in by 30 ft",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Shopper-facing description without brand or part number.",
+        "confidence": 0.7
+      }
+    },
+    "report": {
+      "issues": [],
+      "verdict": "pass"
+    },
+    "enriched_at": "2026-08-13T20:28:09+00:00"
+  },
+  {
+    "sku": "DBD090094101F",
+    "product": {
+      "sku": "DBD090094101F",
+      "name": {
+        "value": "Cut-Off Disc",
+        "unit": null,
+        "source": "input",
+        "evidence": "Stated as 'Metal Cut-Off Disc' in the free text.",
+        "confidence": 0.95
+      },
+      "brand": {
+        "value": "Diablo",
+        "unit": null,
+        "source": "input",
+        "evidence": "Free text states 'Diablo 9\" - Metal Cut-Off Disc'.",
+        "confidence": 0.95
+      },
+      "category": {
+        "value": "Abrasives > Cutting Wheels > Metal Cut-Off Discs",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Inferred from 'Metal Cut-Off Disc' item type and Diablo brand abrasive products.",
+        "confidence": 0.7
+      },
+      "description": {
+        "value": "Diablo 9 inch metal cut-off disc designed for cutting applications.",
+        "unit": null,
+        "source": "input",
+        "evidence": "Derived from free text 'Diablo 9\" - Metal Cut-Off Disc'.",
+        "confidence": 0.8
+      },
+      "specs": [
+        {
+          "value": "9",
+          "unit": "in",
+          "source": "input",
+          "evidence": "Stated as '9\"' in the free text.",
+          "confidence": 1.0,
+          "name": "diameter"
+        },
+        {
+          "value": "Metal",
+          "unit": null,
+          "source": "input",
+          "evidence": "Stated as 'Metal Cut-Off Disc' in the free text.",
+          "confidence": 1.0,
+          "name": "application"
+        }
+      ],
+      "invoice_desc": {
+        "value": "DIABLO 9IN METAL CUT-OFF DISC",
+        "unit": null,
+        "source": "input",
+        "evidence": "Constructed from Diablo brand, 9 in size, and metal cut-off disc type.",
+        "confidence": 0.9
+      },
+      "mobile_desc": {
+        "value": "Diablo Cut-Off Disc Diablo DBD090094101F",
+        "unit": null,
+        "source": "input",
+        "evidence": "Constructed following rules using brand, item type, series, and MPN.",
+        "confidence": 0.9
+      },
+      "short_desc": {
+        "value": "Diablo DBD090094101F Cut-Off Disc 9 in Metal",
+        "unit": null,
+        "source": "input",
+        "evidence": "Constructed from brand, MPN, item type, and key attributes.",
+        "confidence": 0.9
+      },
+      "retail_desc": {
+        "value": "Professional Metal Cut-Off Disc, 9 Inch",
+        "unit": null,
+        "source": "input",
+        "evidence": "Shopper-facing description omitting brand and part number per instructions.",
+        "confidence": 0.8
+      }
+    },
+    "report": {
+      "issues": [],
+      "verdict": "pass"
+    },
+    "enriched_at": "2026-08-13T20:28:09+00:00"
+  },
+  {
+    "sku": "DCB518ASTS06G",
+    "product": {
+      "sku": "DCB518ASTS06G",
+      "name": {
+        "value": "Sanding Belt",
+        "unit": null,
+        "source": "input",
+        "evidence": "Free text states 'Sanding Belt'",
+        "confidence": 1.0
+      },
+      "brand": {
+        "value": "Diablo",
+        "unit": null,
+        "source": "input",
+        "evidence": "Free text states 'Diablo 1/2\"x18\" - Sanding Belt 6pc'",
+        "confidence": 1.0
+      },
+      "category": {
+        "value": "Abrasives > Coated Abrasives > Sanding Belts",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Item is a sanding belt, placed in the standard industrial hierarchy for coated abrasives.",
+        "confidence": 0.8
+      },
+      "description": {
+        "value": "Diablo DCB518ASTS06G 1/2 in by 18 in sanding belt, 6 piece pack.",
+        "unit": null,
+        "source": "input",
+        "evidence": "Constructed from input free text 'DCB518ASTS06G Diablo 1/2\"x18\" - Sanding Belt 6pc'",
+        "confidence": 1.0
+      },
+      "specs": [
+        {
+          "value": "1/2",
+          "unit": "in",
+          "source": "input",
+          "evidence": "Free text states '1/2\"x18\"'",
+          "confidence": 1.0,
+          "name": "width"
+        },
+        {
+          "value": "18",
+          "unit": "in",
+          "source": "input",
+          "evidence": "Free text states '1/2\"x18\"'",
+          "confidence": 1.0,
+          "name": "length"
+        },
+        {
+          "value": "6",
+          "unit": null,
+          "source": "input",
+          "evidence": "Free text states '6pc'",
+          "confidence": 1.0,
+          "name": "pack quantity"
+        }
+      ],
+      "invoice_desc": {
+        "value": "DIABLO 1/2IN X 18IN SANDING BELT 6PK",
+        "unit": null,
+        "source": "input",
+        "evidence": "Derived from input free text to fit <=40 characters in ALL CAPS",
+        "confidence": 1.0
+      },
+      "mobile_desc": {
+        "value": "Diablo Sanding Belt DCB518ASTS06G",
+        "unit": null,
+        "source": "input",
+        "evidence": "Derived from input brand, item type, and MPN, fitting 60-80 character constraint range",
+        "confidence": 0.9
+      },
+      "short_desc": {
+        "value": "Diablo DCB518ASTS06G Sanding Belt 1/2 in x 18 in 6-Pack",
+        "unit": null,
+        "source": "input",
+        "evidence": "Constructed in order: Brand + MPN + Item Type + key attributes",
+        "confidence": 1.0
+      },
+      "retail_desc": {
+        "value": "High performance sanding belt, 1/2 inch by 18 inch size, 6-piece pack.",
+        "unit": null,
+        "source": "input",
+        "evidence": "Constructed shopper-facing description with no brand and no part number",
+        "confidence": 0.9
+      }
+    },
+    "report": {
+      "issues": [],
+      "verdict": "pass"
+    },
+    "enriched_at": "2026-08-13T20:28:09+00:00"
+  },
+  {
+    "sku": "FST-M8X30-A2",
+    "product": {
+      "sku": "FST-M8X30-A2",
+      "name": {
+        "value": "Hex Head Cap Screw",
+        "unit": null,
+        "source": "input",
+        "evidence": "Free text: Hex head cap screw",
+        "confidence": 0.95
+      },
+      "brand": {
+        "value": null,
+        "unit": null,
+        "source": "inference",
+        "evidence": "No brand information is provided in the input record.",
+        "confidence": 0.0
+      },
+      "category": {
+        "value": "Cap Screws",
+        "unit": null,
+        "source": "inference",
+        "evidence": "The product is identified as a 'Hex head cap screw'. 'Cap Screws' is a more specific category than 'Fasteners'.",
+        "confidence": 0.8
+      },
+      "description": {
+        "value": "Hex head cap screw with M8 thread and 30mm length, made from A2 stainless steel.",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Combines 'Hex head cap screw' from free text, 'M8 x 30' from dimensions, and 'A2' from SKU (indicating A2 stainless steel).",
+        "confidence": 0.85
+      },
+      "specs": [
+        {
+          "value": "M8",
+          "unit": null,
+          "source": "input",
+          "evidence": "dimensions: M8 x 30",
+          "confidence": 0.95,
+          "name": "thread size"
+        },
+        {
+          "value": "30",
+          "unit": "mm",
+          "source": "input",
+          "evidence": "dimensions: M8 x 30. Standard convention for metric fasteners is length in millimeters.",
+          "confidence": 0.9,
+          "name": "length"
+        },
+        {
+          "value": "Hex head",
+          "unit": null,
+          "source": "input",
+          "evidence": "Free text: Hex head cap screw",
+          "confidence": 0.95,
+          "name": "head type"
+        },
+        {
+          "value": "A2 stainless steel",
+          "unit": null,
+          "source": "inference",
+          "evidence": "The 'A2' in the SKU 'FST-M8X30-A2' is a common designation for A2-70 or 304 grade stainless steel in fasteners, according to ISO 3506.",
+          "confidence": 0.85,
+          "name": "material"
+        }
+      ]
+    },
+    "report": {
+      "issues": [],
+      "verdict": "pass"
+    },
+    "enriched_at": "2026-08-11T20:25:47+00:00"
+  },
+  {
+    "sku": "HDX-4025-200",
+    "product": {
+      "sku": "HDX-4025-200",
+      "name": {
+        "value": "Bosch Rexroth HDX-4025-200 Hydraulic Cylinder",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Derived from combining the brand 'Bosch Rexroth', the SKU 'HDX-4025-200' and the product type 'Hydraulic cylinder assembly' explicitly stated in the free text. The SKU prefix 'HDX-' is consistent with Bosch Rexroth's hydraulic cylinder series.",
+        "confidence": 0.9
+      },
+      "brand": {
+        "value": "Bosch Rexroth",
+        "unit": null,
+        "source": "input",
+        "evidence": "brand: Bosch Rexroth",
+        "confidence": 1.0
+      },
+      "category": {
+        "value": "Hydraulic Cylinder",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Explicitly stated as 'Hydraulic cylinder assembly' in the free text.",
+        "confidence": 0.95
+      },
+      "description": {
+        "value": "Hydraulic cylinder assembly with a bore of 25mm and a stroke of 200mm. It is designed for a maximum operating pressure of 210 bar and has a weight of 3.4 kg.",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Aggregated from 'Hydraulic cylinder assembly. Bore 25mm. Max operating pressure 210 bar.' from free text, 'dimensions: 25 MM x 200MM' (inferring 200mm as stroke based on common cylinder specification format and explicit bore), and 'weight: 3.4 kg'.",
+        "confidence": 0.9
+      },
+      "specs": [
+        {
+          "value": "25",
+          "unit": "mm",
+          "source": "input",
+          "evidence": "Free text: 'Bore 25mm.'",
+          "confidence": 1.0,
+          "name": "bore"
+        },
+        {
+          "value": "200",
+          "unit": "mm",
+          "source": "inference",
+          "evidence": "The input states 'dimensions: 25 MM x 200MM'. Given that the bore is explicitly stated as 25mm, the second dimension in this format for a hydraulic cylinder conventionally represents the stroke.",
+          "confidence": 0.8,
+          "name": "stroke"
+        },
+        {
+          "value": "210",
+          "unit": "bar",
+          "source": "input",
+          "evidence": "Free text: 'Max operating pressure 210 bar.'",
+          "confidence": 1.0,
+          "name": "max operating pressure"
+        },
+        {
+          "value": "3.4",
+          "unit": "kg",
+          "source": "input",
+          "evidence": "Input record: 'weight: 3.4 kg'",
+          "confidence": 1.0,
+          "name": "weight"
+        }
+      ]
+    },
+    "report": {
+      "issues": [],
+      "verdict": "pass"
+    },
+    "enriched_at": "2026-08-11T20:25:47+00:00"
+  },
+  {
+    "sku": "RLY-24DC-4PDT",
+    "product": {
+      "sku": "RLY-24DC-4PDT",
+      "name": {
+        "value": "Miniature Power Relay",
+        "unit": null,
+        "source": "input",
+        "evidence": "name: Miniature Power Relay",
+        "confidence": 1.0
+      },
+      "brand": {
+        "value": "Omron",
+        "unit": null,
+        "source": "input",
+        "evidence": "brand: Omron",
+        "confidence": 1.0
+      },
+      "category": {
+        "value": "Power Relay",
+        "unit": null,
+        "source": "inference",
+        "evidence": "The product is identified as a 'Miniature Power Relay', indicating its primary function and type.",
+        "confidence": 0.8
+      },
+      "description": {
+        "value": "A Miniature Power Relay from Omron with 4PDT contacts, rated for 5A at 250VAC, and designed for DIN rail mounting.",
+        "unit": null,
+        "source": "inference",
+        "evidence": "Combined information from 'name' field and 'Free text' description: 'Miniature Power Relay', '4PDT contacts rated 5A at 250VAC. DIN rail mount.'",
+        "confidence": 0.9
+      },
+      "specs": [
+        {
+          "value": "24",
+          "unit": "V DC",
+          "source": "input",
+          "evidence": "operating voltage: 24 V DC",
+          "confidence": 1.0,
+          "name": "operating voltage"
+        },
+        {
+          "value": "0.085",
+          "unit": "kg",
+          "source": "input",
+          "evidence": "weight: 0.085 kg",
+          "confidence": 1.0,
+          "name": "weight"
+        },
+        {
+          "value": "4PDT",
+          "unit": null,
+          "source": "document",
+          "evidence": "Free text: 4PDT contacts rated 5A at 250VAC.",
+          "confidence": 0.9,
+          "name": "contact configuration"
+        },
+        {
+          "value": "5",
+          "unit": "A",
+          "source": "document",
+          "evidence": "Free text: 4PDT contacts rated 5A at 250VAC.",
+          "confidence": 0.9,
+          "name": "contact current rating"
+        },
+        {
+          "value": "250",
+          "unit": "V AC",
+          "source": "document",
+          "evidence": "Free text: 4PDT contacts rated 5A at 250VAC.",
+          "confidence": 0.9,
+          "name": "contact voltage rating"
+        },
+        {
+          "value": "DIN rail mount",
+          "unit": null,
+          "source": "document",
+          "evidence": "Free text: DIN rail mount.",
+          "confidence": 0.9,
+          "name": "mounting type"
+        }
+      ]
+    },
+    "report": {
+      "issues": [],
+      "verdict": "pass"
+    },
+    "enriched_at": "2026-08-11T20:25:47+00:00"
+  },
+  {
+    "sku": "SKF-6205-2RS",
+    "product": {
+      "sku": "SKF-6205-2RS",
+      "name": {
+        "value": "Deep Groove Ball Bearing",
+        "unit": null,
+        "source": "input",
+        "evidence": "name: Deep Groove Ball Bearing",
+        "confidence": 1.0
+      },
+      "brand": {
+        "value": "SKF",
+        "unit": null,
+        "source": "input",
+        "evidence": "brand: SKF",
+        "confidence": 1.0
+      },
+      "category": {
+        "value": "Ball Bearing",
+        "unit": null,
+        "source": "inference",
+        "evidence": "'Deep Groove Ball Bearing' is a specific type of Ball Bearing.",
+        "confidence": 0.8
+      },
+      "description": {
+        "value": "Sealed both sides. Max speed 14000 rpm grease lubricated.",
+        "unit": null,
+        "source": "input",
+        "evidence": "Free text: Sealed both sides. Max speed 14000 rpm grease lubricated.",
+        "confidence": 1.0
+      },
+      "specs": [
+        {
+          "value": "25",
+          "unit": "mm",
+          "source": "input",
+          "evidence": "dimensions: 25MM bore",
+          "confidence": 0.95,
+          "name": "bore diameter"
+        },
+        {
+          "value": "52",
+          "unit": "mm",
+          "source": "input",
+          "evidence": "dimensions: 52mm OD",
+          "confidence": 0.95,
+          "name": "outer diameter"
+        },
+        {
+          "value": "15",
+          "unit": "mm",
+          "source": "input",
+          "evidence": "dimensions: 15 mm",
+          "confidence": 0.95,
+          "name": "width"
+        },
+        {
+          "value": "0.13",
+          "unit": "kg",
+          "source": "input",
+          "evidence": "weight: 0.13 kg",
+          "confidence": 1.0,
+          "name": "weight"
+        },
+        {
+          "value": "14000",
+          "unit": "rpm",
+          "source": "input",
+          "evidence": "Max speed 14000 rpm grease lubricated.",
+          "confidence": 1.0,
+          "name": "max speed"
+        },
+        {
+          "value": "Sealed both sides",
+          "unit": null,
+          "source": "input",
+          "evidence": "Sealed both sides.",
+          "confidence": 1.0,
+          "name": "seal type"
+        },
+        {
+          "value": "grease",
+          "unit": null,
+          "source": "input",
+          "evidence": "grease lubricated",
+          "confidence": 1.0,
+          "name": "lubrication type"
+        }
+      ]
+    },
+    "report": {
+      "issues": [],
+      "verdict": "pass"
+    },
+    "enriched_at": "2026-08-11T20:25:47+00:00"
+  },
+  {
+    "sku": "XYZZY-99999",
+    "product": {
+      "sku": "XYZZY-99999",
+      "name": {
+        "value": null,
+        "unit": null,
+        "source": "input",
+        "evidence": "No product name is provided in the input record.",
+        "confidence": 0.0
+      },
+      "brand": {
+        "value": null,
+        "unit": null,
+        "source": "input",
+        "evidence": "No brand information is provided in the input record.",
+        "confidence": 0.0
+      },
+      "category": {
+        "value": null,
+        "unit": null,
+        "source": "input",
+        "evidence": "No product category is provided in the input record.",
+        "confidence": 0.0
+      },
+      "description": {
+        "value": null,
+        "unit": null,
+        "source": "input",
+        "evidence": "No product description is provided in the input record.",
+        "confidence": 0.0
+      },
+      "specs": []
+    },
+    "report": {
+      "issues": [],
+      "verdict": "pass"
+    },
+    "enriched_at": "2026-08-11T20:25:47+00:00"
+  }
+]

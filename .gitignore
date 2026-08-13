@@ -2,8 +2,33 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
-catalog.db
+
+# Secrets. `.env.example` is the tracked template; `.env` holds the real key.
 .env
+
+# Generated at runtime, all reproducible from a command.
+# NOTE: git has no trailing comments — a `#` only starts a comment at the start
+# of a line, so `catalog.db  # regenerate with...` is a literal pattern that
+# matches nothing and silently commits the file. Keep comments on their own line.
+#   catalog.db        -> python -m src.pipeline --seed data/demo_catalog.json
+#   build/            -> python -m src.delivery build/delivery.csv
+#   golden_scores.json-> accumulates across python -m src.golden runs
+catalog.db
+build/
+golden_scores.json
 probe_result.txt
 golden_result.txt
-golden_scores.json
+
+# Session history from the `remember` tooling — not part of the project.
+.remember/
+
+# Organiser-supplied material. Deliberately NOT committed:
+#   - the Gmail PDF contains a participant's personal email address
+#   - all four are Unilog's material to distribute, not ours to redistribute
+# `data/delivery_headers.json` IS committed: it is the 252-column contract
+# extracted from the Expected Output sheet, and `src/delivery.py` needs it to
+# run. Regenerate it if the sheet is ever reissued — see README.
+Gmail - Ready to build_ Here's Your Game Plan & Submission Guide.pdf
+UniHack Solution Guide.pdf
+Unihack_ Expected Output - Delivery Format.csv
+Unihack_ Sample Dataset - Input.csv

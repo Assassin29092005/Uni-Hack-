@@ -84,6 +84,52 @@ and the seeded database rendered both pages with no API key present.
 
 ---
 
+## FEAT-005 — Unilog delivery format compliance   [DONE]
+
+**Scoped:** Make the pipeline read the real shipped input and emit the real
+required output. Everything before this was built against a schema we invented.
+
+**Why:** The organisers shipped a 6-column input and a 252-column Expected
+Output sheet with "do not change or modify the headers". Our pipeline could not
+read their input at all — `Mfg_Part_Num` did not resolve to a SKU, so
+`ingest_csv` refused the file outright. Without this the project could not be
+submitted, however good the enrichment was.
+
+**Design:**
+- `src/delivery.py` — writes their 252 columns byte-exactly from a captured
+  header contract, plus a provenance sidecar (DECISIONS 022).
+- Placeholder sentinels stripped; `Part_Manuf` mapped to `supplier`, never
+  `brand` (DECISIONS 023).
+- Five description variants on `Product`, each generated to its own length and
+  casing rule rather than truncated from one another.
+- `checks.delivery_checks` for format compliance, kept off the confidence path
+  (DECISIONS 024).
+- Attribute labels stored lowercase, Title Cased on export.
+
+**Verified live on real Unilog rows:** 5/5 enriched, **5/5 delivery-format
+compliant**, headers byte-identical to the supplied sheet. From the single input
+string `"3M 775L Stikit Film P120 - Cubitron II 50 Disc/Box"` the pipeline
+produced a 3-level Classpath, brand `3M`, all five descriptions within their
+character rules (`INVOICE_DESC` 34 chars ALL CAPS, `MOBILE_DESC` 70 chars), and
+6 attributes as LABEL/VALUE/UOM triplets. 40 tests pass.
+
+Found and fixed BUG-007 while reading the first real export: the normalizer was
+splitting product codes as if they were quantities (`775L` → `775 L`).
+
+**Left out:**
+- **7 of the 11 reference files the Solution Guide describes were not in the
+  pack we received** — including the 200-item labelled ground truth, the 27k
+  approved manufacturer/brand list, the LOV vocabularies and the UOM standard.
+  Without them `MANUFACTURER_NAME` mirrors `BRAND_NAME`, attribute values are
+  not constrained to the approved LOV, and there is no ground truth to score
+  field-level accuracy against. See README → Missing reference data.
+- ITEM_FEATURES_1..20, UNSPSC, UPC/EAN/GTIN, dimensions and asset columns stay
+  blank — nothing in a 6-column input grounds them.
+- No web retrieval, so `MFR URL` / `Ref URL` columns are empty. The guide
+  permits manufacturer sites only.
+
+---
+
 ## FEAT-003 — Golden set widened 8 → 32 records   [DONE, 28/32 scored]
 
 **Scoped:** Move the accuracy claim from "promising signal on 8 records" to

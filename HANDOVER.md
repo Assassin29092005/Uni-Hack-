@@ -3,116 +3,77 @@
 **Read this first, every session.** State of the project right now — not history.
 Rewritten (not appended) at the end of every chat.
 
-Last updated: 2026-08-12 23:55 IST
+Last updated: 2026-08-14 03:05 IST
 
 ---
 
 ## Where things stand
 
-**All 8 build-plan milestones are shipped and demonstrated.** The pipeline has
-run end to end against the live Gemini free tier (5/5 records, `failed_records=0`),
-the abstention case holds (`XYZZY-99999` → 0% complete, 0.00 confidence, four
-gaps with per-field reasons), and re-running skips finished SKUs without spending
-a call.
+**The project now speaks Unilog's actual format.** Everything before 2026-08-14
+was built against a schema we invented; the organisers' real files arrived and
+the pipeline could not even read their input.
 
-This session was an audit-and-repair pass with **no API key on the machine**, so
-everything done is offline-verifiable. Four claims in `CLAUDE.md` that the code
-did not actually back are now backed, and two real bugs were found — one of them
-live since the first commit.
+- Input: their 6-column sheet ingests, all 1000 rows.
+- Output: `src/delivery.py` writes their **252 columns byte-exactly**, plus a
+  provenance sidecar. Guarded by a test against their file.
+- **17 real Unilog records enriched and exported** — `build/delivery.csv`,
+  `data/demo_catalog.json` (seedable with no API key).
+- **Golden set re-validated on the current prompt: 0 hallucinations,
+  201/201 abstention, 135/140 grounding (96%).**
+- 42 tests pass.
 
-```
-src/models.py      schema — Sourced/Spec/Product/Issue/ValidationReport
-src/normalize.py   deterministic units, casing, aliases — input AND output
-src/llm.py         provider layer: gemini (default) | ollama | anthropic
-src/enrich.py      prompts + enrich pass + validate pass + apply_report
-src/checks.py      deterministic validation rules (new this session)
-src/store.py       SQLite persistence + append-only audit trail + export/seed
-src/pipeline.py    ingest, orchestration, CLI
-src/app.py         web UI (catalog + provenance + validation findings) and JSON API
-src/probe.py       adversarial validator check (planted errors + control)
-src/golden.py      accuracy harness vs data/golden.json
-test_pipeline.py   32 checks, all passing
-data/golden.json   32 hand-checked records, 24 of them traps
-data/sample_products.csv   5 deliberately messy rows
-```
+Deadline: **23 August 2026, 11:59 PM IST.**
 
-## Done this session (all offline, no quota spent)
+## Submission checklist (from the organisers' email)
 
-- **`src/checks.py`** — four deterministic rules, same `Issue` type as the model,
-  merged in `process()`. Runs even when the validation API call failed, so a
-  record whose audit died is degraded rather than unexamined. DECISIONS 019.
-- **Output normalization** — `normalize_specs` canonicalises the model's own spec
-  names and units. Exact duplicates merge; contradictions are deliberately kept
-  for the rules to report. DECISIONS 020.
-- **The UI now shows what the validator found.** Reports were persisted from the
-  first commit and nothing ever read them back. Also distinguishes "no issues"
-  from "never ran".
-- **Pagination** on the catalog page and `/api/products`. Both were unbounded
-  `SELECT`s.
-- **`--export` / `--seed`** so a demo never needs live quota. DECISIONS 021.
-- **BUG-005 fixed** — `normalize_key` deleted every non-Latin character. Three of
-  four attributes on our own Chinese golden record were being dropped *before*
-  enrichment; French names were mangled. Live since the first commit.
-- **BUG-006 fixed** — the `?page=` route parameter shadowed the `page()` renderer
-  and every catalog request raised `TypeError` while all 19 tests passed.
-- **Tests 19 → 32.** Every new rule has a control case, including one asserting
-  the deterministic rules stay silent on the exact fixture `probe.py` requires
-  the LLM validator to call clean.
+| Item | State |
+|---|---|
+| GitHub repo link | ready |
+| Prototype deck (PDF, mandatory template from dashboard, <=5 MB) | **not started** |
+| Solution brief (text) | draft from README intro |
+| Live prototype URL | **not deployed** — `src/app.py` runs locally only |
+| Demo video | **not recorded** |
 
-## In progress
-
-Nothing mid-edit. The repo is in a consistent, runnable state.
+The three "not" rows are the submission risk now, not the code.
 
 ## Next up
 
-**Everything here needs an API key, which this machine does not have.** In
-priority order once one is available:
-
-1. **Re-run the golden set.** This is now the blocker on every accuracy claim.
-   Three separate reasons the cached numbers are stale:
-   - `golden_scores.json` **is gone from this working tree** (gitignored), so the
-     28 accumulated scores no longer exist. `--report` currently prints "No
-     scores cached yet."
-   - BUG-005 means the two non-English records were scored on inputs we had
-     silently deleted three quarters of.
-   - The new deterministic rules change what gets published, so hallucination
-     **and** grounding will both move.
-   Prefer one model for the whole set if quota allows (DECISIONS 018).
-2. **Settle the BUG-004 confound — 6 calls, cheap.**
-   `python -m src.golden --only MISL-1756-IF16-XT,MISL-6205-2RS-C3-77,MISL-VLV-12-150-316 --force`
-   Do not apply the drafted prompt fix before knowing whether it is a prompt
-   problem or a model-choice problem.
-3. **Create the demo seed.** Run the pipeline once, then
-   `python -m src.pipeline --export data/demo_catalog.json` and commit it. After
-   that the UI demos on any machine with `--seed` and zero API calls. Do **not**
-   hand-write this file (DECISIONS 021).
-4. **Re-run `python -m src.probe`** as one clean sweep — the README's table is
-   correct but was assembled across two runs.
-5. Then, and only then, update the README Results numbers.
+1. **Deploy the UI** for the Live Prototype Link. It is a read-only FastAPI app
+   over a SQLite file, so a seeded `catalog.db` plus any host works — no key or
+   quota needed at runtime. That property was designed in; use it.
+2. **Enrich a wider slice** of the 1000-row input and export a delivery CSV to
+   show alongside the deck. Quota is ~20 requests/day/model, 2 calls/record —
+   rotate models (`--models a,b,c`) and start early.
+3. **Deck + video.** Lead with the refusal surface and the provenance sidecar;
+   that is the differentiator, and the brief explicitly calls a confidence /
+   needs-review flag "a genuinely valuable feature".
+4. Re-run the golden set — accuracy figures predate the delivery-format prompt
+   rewrite, so they describe a prompt that no longer exists.
+5. If the missing reference files arrive, wire the manufacturer/brand list and
+   LOV first: they convert "grounded" into "conformant" (README → Missing
+   reference data).
 
 ## Broken / known issues
 
-- **No accuracy number is currently defensible.** The README's figures (97%
-  grounding, 96% abstention, 6 hallucinations) were true when measured, but the
-  score cache is gone, two records were scored on corrupted input (BUG-005), and
-  the pipeline has changed since. Treat them as historical until re-run.
-- **No `catalog.db` and no `golden_scores.json` in this tree.** Both gitignored.
-  The UI renders "No products yet" until something enriches or seeds.
-- **BUG-004 open, now mitigated not fixed.** The rules stop identifier-decoded
-  specs being *published*; the model still generates them, and a spec inferred
-  without saying so in its evidence still escapes.
-- **The rules' effect on grounding is unmeasured.** They may suppress legitimate
-  inference along with the hallucinations. Only the golden set can tell.
-- **Free-tier quota: 20 requests/day/model**, measured from the API's own 429.
-  Two calls per record ≈ 10 records/day/model. Quota is per-model, so
-  `GEMINI_MODEL=gemini-2.5-flash-lite` gets a fresh bucket.
-- **Ingest is CSV-only** while `CLAUDE.md` scopes CSV/JSON/PDF/URL. Visible in
-  the schema: `source: document` and `source: web` are declared and unreachable.
-- 4 of 32 golden records were never scored even before the cache was lost.
-- Headline accuracy blended 4 models (quota rotation). See DECISIONS 018.
-- Compound dimension strings (`"25 MM x 200MM"`) pass through normalization
-  untouched — deliberate, the model reads them. Pinned by a test.
-- Single model per run; no per-record tiering (DECISIONS 007).
+- **7 of 11 reference files were not in the pack.** No labelled ground truth, no
+  approved manufacturer/brand list, no LOV, no UOM standard. We can show
+  grounding; we cannot yet show conformance. Full table in README.
+- **MOBILE_DESC compliance: 1/17 rows.** The 60-char minimum is the only
+  format rule the demo catalog fails. Cause found and fixed — the prompt asked
+  the model to *count characters*, which LLMs are unreliable at; it now specifies
+  the components (Manufacturer, Brand, Item Type, Series, MPN) so the length
+  follows from the content. Spot-checked 2/3 compliant after the change. **The
+  17 stored records predate the fix and need re-enriching when quota resets** —
+  `python -m src.pipeline data/unilog_demo.csv --force`.
+- Free-tier quota for 2026-08-14 is **spent** across flash and most lite models,
+  used by the golden re-validation and the demo enrichment. Resets ~12:30 IST.
+- BUG-008: BUG-004's prompt fix was silently lost in a merge and restored. Now
+  asserted by a test — a prompt is code, and it was the only code with no test.
+- `MANUFACTURER_NAME` mirrors `BRAND_NAME` (no approved list shipped).
+- ~170 of 252 columns stay blank. Correct — nothing in a 6-column input grounds
+  UPC, UNSPSC, dimensions or asset filenames — but a judge will notice, so say
+  it before they ask.
+- Free-tier quota ~20 requests/day/model; 2 calls per record.
 
 ## Avoid
 
@@ -130,8 +91,14 @@ priority order once one is available:
 
 ## Open questions for the user
 
-- Is there an organizer-provided dataset, or do we keep sourcing our own samples?
-- Submission deadline and demo format (live / recorded / repo only)?
-- Team size — is anyone else committing to this repo?
-- Where did the working key go? The pipeline has run live before, so one existed;
-  `.env` is absent now and it gates every remaining task.
+Three of the four earlier questions are now answered by the organisers' files:
+the dataset is theirs (1000-row input + 252-column output sheet), the deadline is
+23 Aug 2026 11:59 PM IST, and submission is deck + brief + live URL + repo +
+video. What remains:
+
+- **Can the other 7 reference files be obtained?** They are named in the Solution
+  Guide but were not in the pack. The manufacturer/brand list and the LOV are the
+  two that would most change the output.
+- Team size — is anyone else committing to this repo? (One teammate's work is
+  already merged.)
+- Where will the live prototype be hosted?

@@ -246,6 +246,174 @@ def test_golden_set_is_structurally_valid():
                 f"demanding it would reward guessing")
 
 
+def test_brand_must_appear_in_the_record():
+    """BUG-009. The first BUG-004 fix explicitly permitted naming a manufacturer
+    from a part number, so `1756-IF16-XT` still produced 'Allen-Bradley'. House
+    brands copy famous numbering schemes constantly; the SKU resembling one is
+    evidence of nothing."""
+    from src.models import RawRecord, Sourced
+
+    record = RawRecord(sku="MISL-1756-IF16-XT", attributes={},
+                       text="16-channel analog input module, 24 V DC.")
+
+    invented = demo_product(brand=Sourced(
+        value="Allen-Bradley", source="inference", confidence=0.8,
+        evidence="The 1756-IF16 pattern matches the ControlLogix scheme."))
+    assert checks.brand_not_in_record(record, invented), "decoded brand must be flagged"
+
+    # A brand the record actually contains is grounded, even loosely quoted.
+    stated = RawRecord(sku="X", attributes={}, text="3M 775L Stikit Film P120")
+    ok = demo_product(brand=Sourced(value="3M", source="inference", confidence=0.9,
+                                    evidence="Named in the description."))
+    assert not checks.brand_not_in_record(stated, ok), "a brand in the text is grounded"
+
+    # Column-sourced brands are somebody else's rule to police.
+    from_column = demo_product(brand=Sourced(
+        value="Acme", source="input", confidence=1.0, evidence="Mfr: Acme"))
+    assert not checks.brand_not_in_record(record, from_column)
+
+
+def test_enrich_prompt_forbids_identifier_decoding():
+    """BUG-008. BUG-004's fix lived only in prompt prose, so a rewrite of an
+    adjacent block silently reverted it and all 32 tests stayed green — its
+    evidence was a golden-set score, not an assertion. A prompt is code; this is
+    the assertion it was missing."""
+    from src.enrich import ENRICH_SYSTEM
+
+    assert "identifier, not a specification" in ENRICH_SYSTEM, (
+        "BUG-004's prompt fix is missing from ENRICH_SYSTEM — see BUG-008"
+    )
+    # The original wording actively invited the failure. It must not come back.
+    assert "model number decoding" not in ENRICH_SYSTEM, (
+        "the confidence ladder again endorses decoding part numbers (BUG-004 root cause)"
+    )
+
+
+def test_delivery_headers_match_the_supplied_sheet_exactly():
+    """The brief says: "Contains the static headers your solution must populate.
+    Please do not change or modify the headers." A reordered or renamed column
+    could fail the whole submission on format, so the contract is asserted
+    against their file directly whenever it is present."""
+    import csv as _csv
+
+    from src import delivery
+
+    ours = delivery.headers()
+    assert len(ours) == 252, f"expected 252 delivery columns, have {len(ours)}"
+
+    supplied = Path("Unihack_ Expected Output - Delivery Format.csv")
+    if supplied.exists():  # absent on a fresh clone; the JSON is the checked-in copy
+        with open(supplied, encoding="utf-8-sig", newline="") as fh:
+            theirs = next(_csv.reader(fh))
+        assert ours == theirs, "delivery headers have drifted from the supplied sheet"
+
+
+def test_delivery_row_is_complete_and_refuses_ungrounded_values():
+    from src import delivery
+
+    product = demo_product(
+        brand=sourced("Acme", confidence=0.2),        # below the floor
+        category=sourced("Tools > Power Tools > Drills"),
+    )
+    row = delivery.to_row(product, {"Mfg_Part_Num": "ACME-1", "Part_Desc": "raw text"})
+
+    # Every column present, every time — a short row would misalign the CSV.
+    assert list(row) == delivery.headers()
+
+    assert row["Mfg_Part_Num"] == "ACME-1"
+    assert row["Part_Desc"] == "raw text", "the distributor's own text passes through"
+    # A low-confidence brand is a blank cell, never a hedged guess.
+    assert row["BRAND_NAME"] == ""
+    # Classpath splits into its three levels rather than being asked for 4x.
+    assert row["Dept"] == "Tools" and row["Class"] == "Power Tools" and row["Fine"] == "Drills"
+    # Spec -> LABEL/VALUE/UOM triplet, units kept out of the value. Labels are
+    # stored lowercase for case-insensitive dedup and Title Cased on the way out
+    # to match Unilog house style.
+    assert row["ATTRIBUTE_LABEL 1"] == "Thread" and row["ATTRIBUTE_VALUE 1"] == "M8"
+
+
+def test_unit_split_only_fires_on_known_units():
+    """`digits + letters` is not enough to call something a quantity. The
+    abrasive series "775L" was being rewritten to "775 L", and a bearing code
+    like "6205C3" would split the same way — an unrecognised suffix is far more
+    likely to be part of a product code than a unit we forgot to list."""
+    assert normalize_value("775L") == "775L", "series code must survive intact"
+    assert normalize_value("6205C3") == "6205C3"
+    assert normalize_value("P120") == "P120"
+    # Real units still split, with a space, as Unilog requires.
+    assert normalize_value("24VDC") == "24 V DC"
+    assert normalize_value("25mm") == "25 mm"
+
+
+def test_attribute_labels_use_unilog_title_case():
+    from src.delivery import _title_case
+
+    assert _title_case("grit rating") == "Grit Rating"
+    assert _title_case("number of wash cycles") == "Number of Wash Cycles"
+    assert _title_case("ip rating") == "IP Rating", "initialisms stay upper"
+    assert _title_case("od") == "OD"
+
+
+def test_placeholders_are_not_data():
+    """The brief: "-- Unbranded --", "-- No Unilog Brand --" and "-- No DIB
+    Brand --" mean the field is empty. Left in, the model describes a product
+    made by a manufacturer called Unbranded."""
+    from src.normalize import is_placeholder
+
+    for sentinel in ("-- Unbranded --", "--UNBRANDED--", "-- No Unilog Brand --",
+                     "-- No DIB Brand --", "N/A", "TBD", "-", "  ", "none"):
+        assert is_placeholder(sentinel), f"{sentinel!r} should read as empty"
+    for real in ("SKF", "Bosch Rexroth", "3M", "Unbranded Tools Ltd"):
+        assert not is_placeholder(real), f"{real!r} is a real value"
+
+    record = normalize_record("P-1", {"E1_Brand": "-- Unbranded --", "Mfr": "SKF"})
+    assert record.attributes.get("brand") == "SKF", "sentinel dropped, real brand kept"
+
+
+def test_unilog_input_schema_ingests():
+    """The shipped input is 6 columns whose names none of our original aliases
+    covered — `Mfg_Part_Num` did not resolve to a SKU, so ingest refused the
+    file outright."""
+    from src.normalize import normalize_key
+
+    assert normalize_key("Mfg_Part_Num") == "sku"
+    assert normalize_key("Part_Desc") == "description"
+    # Part_Manuf is the DEALER. The sample delivery row pairs it with a
+    # different MANUFACTURER_NAME, so mapping it to brand would feed the model
+    # a confident wrong answer.
+    assert normalize_key("Part_Manuf") == "supplier"
+    assert normalize_key("Part_Manuf") != "brand"
+
+
+def test_delivery_format_checks_are_separate_from_content_checks():
+    """Format compliance must not flow through `apply_report`: downgrading a
+    well-grounded category because its Classpath has two levels would move the
+    grounding and abstention numbers the golden baseline is measured on."""
+    product = demo_product(category=sourced("Tools"))  # 1 level, not 3
+
+    assert any("Classpath" in i.detail for i in checks.delivery_checks(product))
+    assert not any("Classpath" in i.detail for i in checks.run_checks(CYLINDER, product)), (
+        "a formatting rule leaked into the content-validation path"
+    )
+
+
+def test_invoice_desc_character_rules():
+    from src.models import Sourced
+
+    too_long = demo_product(invoice_desc=Sourced(
+        value="DISHWASHER WITH A GREATLY OVERLONG MARKETING SENTENCE ATTACHED",
+        source="inference", evidence="t", confidence=0.9))
+    assert any("40" in i.detail for i in checks.delivery_checks(too_long))
+
+    lowercase = demo_product(invoice_desc=Sourced(
+        value="dishwasher leg 5 sst", source="inference", evidence="t", confidence=0.9))
+    assert any("ALL CAPS" in i.detail for i in checks.delivery_checks(lowercase))
+
+    fine = demo_product(invoice_desc=Sourced(
+        value="DISHWASHER LEG 5 SST 120V 15A", source="inference", evidence="t", confidence=0.9))
+    assert not any("INVOICE_DESC" in i.field for i in checks.delivery_checks(fine))
+
+
 def test_ui_escapes_model_output():
     """Everything the UI renders — values, evidence, spec names — is LLM output.
     A product description containing a script tag must render as text, not run."""

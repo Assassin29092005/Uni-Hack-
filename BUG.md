@@ -24,6 +24,107 @@ re-running the same dead end, and that is most of this file's value.
 
 ---
 
+## BUG-009 — BUG-004's fix had a hole I wrote into it   [FIXED]
+
+**Found:** 2026-08-14, re-scoring the golden set after the delivery-format prompt
+rewrite. Two hallucinations were back that BUG-004's fix had eliminated.
+
+**Symptom:** `MISL-1756-IF16-XT` again produced brand `Allen-Bradley`, decoded
+from a SKU resembling the ControlLogix scheme, on a record whose manufacturer
+column is empty.
+
+**Root cause:** my own wording. BUG-004's fix said:
+
+> "you may name the likely manufacturer or product family as an inference — but
+> you must NOT emit dimensions, materials, clearances..."
+
+That first clause **explicitly permits** exactly this failure. The fix verified
+clean at the time because the run happened to land on models that declined
+anyway; the permission was always there, waiting for a model that took it.
+
+**Fix, two layers.** The prompt now says a part number is not a source, and
+brand is grounded only when the record itself contains it — "3M 775L Stikit"
+names 3M, "1756-IF16-XT" with an empty manufacturer column names nobody. And
+`checks.brand_not_in_record` enforces it deterministically: an `inference` brand
+whose text appears nowhere in the record is flagged regardless of prompt wording.
+
+The deterministic rule is the load-bearing half. Prose fixes decay under editing
+— that is BUG-008 — and this one decayed the moment a different model read it
+literally.
+
+**Verified:** `MISL-1756-IF16-XT` re-scored on the same model that failed it:
+brand hallucination gone, abstention 10/10. `test_brand_must_appear_in_the_record`
+covers the decoded case, the legitimately-stated case, and column-sourced brands.
+Full set back to **0 hallucinations, 201/201 abstention**.
+
+**Also corrected while here — a bad test, not a bad model.** `DATA-FLUFF-0001`
+carried `max_specs: 0`, asserting the record stated nothing extractable. It
+states `"ISO 9001 certified facility"`, and the model quoted it correctly. The
+expectation violated the golden set's own rule (verifiable from the input alone),
+so the fixture was wrong and is now `max_specs: 1`. The fluff trap it was built
+for — copy that names power ratings and voltage classes without ever giving a
+number — still passes via `forbidden_specs`.
+
+---
+
+## BUG-007 — Product codes split as if they were quantities   [FIXED]
+
+**Found:** 2026-08-14, reading the first real Unilog delivery export. The
+abrasive series `775L` had been rewritten as `775 L`.
+
+**Symptom:** `ATTRIBUTE_VALUE` for a 3M sanding disc read `775 L` where the input
+said `775L`. Silent: the value looks plausible, and a buyer searching the series
+simply would not find it.
+
+**Root cause:** `normalize.normalize_value` matched `^digits + letters$` and
+treated any trailing letters as a unit. Right for `24VDC` and `25mm`, wrong for
+anything shaped like a code — `775L`, `6205C3`, `P120`. The pattern had no notion
+of whether the suffix was a unit it actually knew.
+
+Worth noting how it surfaced: the enrichment was correct and the *normalizer*
+corrupted it afterwards. Every validation instrument we have points at the model,
+so nothing was watching this direction — the same blind spot as BUG-005.
+
+**Fix:** split only when the trailing token resolves in `UNIT_ALIASES`. An
+unrecognised suffix is far more likely to be part of a product code than a unit we
+forgot to list, so the safe default is to leave the value untouched.
+
+**Verified:** `test_unit_split_only_fires_on_known_units` — `775L`, `6205C3` and
+`P120` survive intact while `24VDC` -> `24 V DC` and `25mm` -> `25 mm`.
+
+---
+
+## BUG-008 — BUG-004's prompt fix was lost in a merge   [FIXED]
+
+**Found:** 2026-08-14, while renumbering docs after merging a teammate's work.
+`grep "identifier, not a specification" src/enrich.py` returned nothing.
+
+**Symptom:** `ENRICH_SYSTEM`'s confidence ladder had reverted to the original
+wording — *"0.7-0.9 strongly implied by the input (model number decoding,
+explicit series)"* — the exact sentence identified as BUG-004's root cause. The
+fix had been verified (hallucinations 2 -> 0 on `MISL-6205-2RS-C3-77`, grounding
+held at 14/14 on controls) and then silently reverted when the prompt section was
+rewritten for other reasons.
+
+Nothing failed. All 32 tests stayed green, because the fix's evidence lived in a
+golden-set score, not in an assertion.
+
+**Root cause:** a prompt is code, but it is the one kind of code with no unit
+test asserting its content. A rewrite of an adjacent block took the fix with it
+and no instrument noticed.
+
+**Fix:** restored the paragraph. BUG-004's mitigation is now two independent
+layers, which is the right shape: `checks.identifier_decoded_specs` catches a
+decoded spec *after* generation, and the prompt discourages generating it. The
+teammate's re-marking of BUG-004 as "OPEN — mitigated" was correct given the
+code as it stood.
+
+**Verified:** `test_enrich_prompt_forbids_identifier_decoding` asserts the
+paragraph is present, so the next merge that drops it fails a test instead of a
+golden run nobody re-ran.
+
+---
+
 ## BUG-006 — Adding `?page=` killed every catalog request   [FIXED]
 
 **Found:** 2026-08-12, first end-to-end render after adding pagination. The full
@@ -95,7 +196,7 @@ hallucination count may move in either direction.
 
 ---
 
-## BUG-004 — Part numbers get decoded from memory   [OPEN — mitigated]
+## BUG-004 — Part numbers get decoded from memory   [FIXED — two layers]
 
 **Found:** 2026-08-12, first run of the 32-record golden set. Invisible to the
 previous 8-record set, which scored 0 hallucinations.

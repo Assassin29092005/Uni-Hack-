@@ -55,7 +55,11 @@ def ingest_csv(path: Path) -> list[RawRecord]:
         )
         attributes = {c: v for c, v in row.items()
                       if c != sku_column and normalize_key(c) not in TEXT_COLUMNS}
-        records.append(normalize_record(sku, attributes, text))
+        record = normalize_record(sku, attributes, text)
+        # Keep the untouched source row: the delivery export passes the
+        # distributor's own columns through verbatim (DECISIONS 019).
+        record.raw = {k: (v or "") for k, v in row.items()}
+        records.append(record)
     return records
 
 
@@ -87,7 +91,7 @@ def run(csv_path: Path, db_path: Path, force: bool = False, workers: int | None 
             store.save_error(conn, record.sku, error or "unknown failure")
             print(f"  {record.sku}: FAILED — {error}")
             continue
-        store.save(conn, product, report)
+        store.save(conn, product, report, raw=record.raw)
         gaps = f", gaps: {', '.join(product.gaps)}" if product.gaps else ""
         print(
             f"  {record.sku}: {report.verdict} "

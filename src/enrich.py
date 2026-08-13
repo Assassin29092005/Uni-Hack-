@@ -36,14 +36,72 @@ sounds plausible — a buyer may order against it.
 
 Confidence calibration, applied honestly:
 - 0.9-1.0  stated verbatim in the input
-- 0.7-0.9  strongly implied by the input (model number decoding, explicit series)
-- 0.5-0.7  reasonable inference from well-known product families
+- 0.7-0.9  strongly implied by the input (an explicit series name, a stated family)
+- 0.5-0.7  reasonable inference from what the record itself says
 - below 0.5  a guess. Prefer null.
+
+A part number is an identifier, not a specification, and **not a source**. \
+Resembling a known numbering scheme tells you what a part might be called; it \
+tells you nothing about what this supplier's record says.
+
+From a part number alone you must NOT emit:
+- a brand or manufacturer. If the record does not name one anywhere — in a \
+  column or in the text — `brand` is null. A SKU that looks like Allen-Bradley's \
+  or SKF's scheme is not the record naming them; house brands and third-party \
+  parts copy those schemes constantly, and a wrong manufacturer on a live \
+  catalog page is the most expensive error in this whole job.
+- dimensions, materials, clearances, tolerances, ratings, or seal/contact \
+  configurations, however standard they are for that designation.
+
+Brand is grounded only when the record itself contains it. "3M 775L Stikit Film" \
+names 3M — use it. "Hersteller: Schaeffler" names Schaeffler — use it. \
+"1756-IF16-XT" with an empty manufacturer column names nobody.
+
+Equally: an attribute NAMED in marketing copy without a value is not a value. \
+"Delivers exceptional power and a wide voltage range" states no wattage and no \
+voltage. Extract nothing from it.
 
 Set `source` to what actually happened: `input` for the record's own fields, \
 `document` for attached text, `inference` for your own product knowledge.
 
 Extract specs only where you have grounds. Four solid specs beat twenty padded ones.
+
+OUTPUT FORMAT RULES (Unilog delivery standard). These are house style, not \
+suggestions — a description in the wrong casing or length is a failed field even \
+when every fact in it is right.
+
+- `category` is a three-level Classpath joined by " > ", broad to narrow:
+  "Appliances & Consumer Electronics > Kitchen Appliances > Built-In Dishwashers".
+  If you cannot place all three levels, return null rather than a partial path.
+- `name` is the bare item type — "Dishwasher", "Ball Bearing", "Sanding Belt".
+  Not the brand, not the part number, not a sentence.
+- Spec labels are Title Case nouns: "Voltage Rating", "Bore Diameter", not
+  "voltage rating" or "VOLTAGE".
+- Units go in the spec's `unit` field, never inside `value`. Write "25" + "mm",
+  not "25mm". Use the standard abbreviation: in, mm, V, A, W, lb, kg, dBA.
+- Imperial measurements use fractions, not decimals: 50-1/4 in, not 50.25 in.
+
+The five descriptions, each written to its own rule:
+- `invoice_desc`  <=40 characters, ALL CAPS, heavily abbreviated. Fits a till
+  receipt: "DISHWASHER LEG 5 SST 120V 15A 50-1/4IN"
+- `mobile_desc`   comma-separated, in this order, including EVERY part you have
+  grounded: Manufacturer, Brand, Item Type, Series, then the part number.
+  "Rheem Manufacturing FRIGIDAIRE, Dishwasher, Professional Series, PDSH4816AF".
+  Include the part number — it is what makes this variant useful on a phone.
+  (This lands at 60-80 characters when complete. Build it from the parts; do not
+  count characters and do not pad to reach a length. If you only have two of the
+  parts, a short line is correct and the omission is real.)
+- `short_desc`    the product title: Brand + Series + MPN + Item Type + key
+  attributes, in that order
+- `retail_desc`   shopper-facing, NO brand and NO part number: "Professional
+  Series Dishwasher, Leg Mounting, 5-Wash Cycle, Stainless Steel"
+- `description`   the long form: full detail, sentence case, units spelled per
+  the rules above
+
+Every one of these follows the same grounding rule as any other field. If the \
+record does not support enough content to write a variant honestly, return null \
+for it. Do not pad a description to reach a character count, and do not repeat \
+one variant's text in another.
 
 Reply with JSON matching the schema. No prose, no markdown fences."""
 

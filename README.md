@@ -120,6 +120,96 @@ from prose.
 | `ollama` | free | local install, no account at all |
 | `anthropic` | paid | API key |
 
+## Delivery format
+
+The organisers ship a 6-column input and require a **252-column** output sheet,
+with the instruction *"Please do not change or modify the headers."*
+
+```
+INPUT  (6 cols)                          OUTPUT (252 cols)
+Mfg_Part_Num                             PART_NUMBER, Dept/Class/Fine, Classpath,
+Part_Desc          ── enrich ──▶         MANUFACTURER_NAME, BRAND_NAME,
+E1_Brand    "-- Unbranded --"            5 descriptions at 5 lengths,
+Unilog_Brand"-- No Unilog Brand --"      ATTRIBUTE_LABEL/VALUE/UOM x 50,
+DIB_Brand   "-- No DIB Brand --"         UPC/EAN/GTIN, dimensions, assets...
+Part_Manuf  (the dealer, not the maker)
+```
+
+```bash
+python -m src.pipeline data/unilog_demo.csv        # 12 real rows, committed
+python -m src.delivery build/delivery.csv
+```
+
+`data/unilog_demo.csv` is a 12-row extract of the organisers' 1000-row sheet, so
+the pipeline is runnable straight from a clone. The full input and the Expected
+Output sheet are **not committed** — they are Unilog's material, and the
+accompanying briefing PDF carries a participant's personal email address. Drop
+them in the repo root and the same commands take the full file:
+
+```bash
+python -m src.pipeline "Unihack_ Sample Dataset - Input.csv"
+```
+
+`data/delivery_headers.json` **is** committed — it is the 252-column contract
+extracted from the Expected Output sheet, and `src/delivery.py` cannot run
+without it. When the sheet is present, a test asserts the two still match.
+
+Every run writes two files. `delivery.csv` is their 252 columns byte-exactly —
+a test asserts our header list still equals their sheet, so drift fails loudly
+rather than at judging time. `delivery.provenance.csv` carries the source,
+evidence, confidence and a `needs_review` flag for every value **including the
+refusals**, because their schema has nowhere to record why a cell says what it
+says and we were told not to add columns (DECISIONS 022).
+
+Three input traps the pipeline handles deterministically, before any model call:
+
+| Trap | Why it bites | Handling |
+|---|---|---|
+| `-- Unbranded --` and friends | Left in, the model describes a product made by a company called Unbranded | `is_placeholder` strips ~20 sentinel forms |
+| `Part_Manuf` is a **dealer** | The sample pairs `Part_Manuf` "Appliance Dealers Cooperative" with `MANUFACTURER_NAME` "Rheem Manufacturing" — aliasing it to brand feeds the model a confident falsehood as if it were input | maps to `supplier`, never `brand` |
+| Codes that look like quantities | `775L` was being rewritten to `775 L` (BUG-007) | unit-splitting only fires on units we actually know |
+
+**Live result on real Unilog rows — 5/5 enriched, 5/5 format-compliant.** From
+the single input string `3M 775L Stikit Film P120 - Cubitron II 50 Disc/Box`:
+
+| Column | Generated |
+|---|---|
+| `Classpath` | Industrial Supplies > Abrasives > Sanding Discs |
+| `BRAND_NAME` | 3M |
+| `INVOICE_DESC` | `3M 775L STIKIT FILM P120 DISC 50BX` (34 chars, ALL CAPS) |
+| `MOBILE_DESC` | 70 chars, within the 60–80 rule |
+| `RETAIL_DESC` | no brand, no MPN, as the rule requires |
+| attributes | 6 triplets: Series, Grit Rating, Grain Type, Attachment Type, Backing Material, Quantity per Box |
+
+Character limits, casing and Classpath depth are checked deterministically by
+`checks.delivery_checks` and reported on every export — that is the
+"character-limit compliance" metric the brief asks submissions to show. It is
+kept off the confidence path on purpose: a formatting rule must not downgrade a
+well-grounded value, or the accuracy numbers stop being comparable
+(DECISIONS 024).
+
+## Missing reference data
+
+The Solution Guide describes **eleven** files. Four were in the pack we
+received. The seven below were not, and each one bounds what the pipeline can
+currently claim:
+
+| Missing file | What it would enable |
+|---|---|
+| `Unilog-Sample_200_Items-Input-vs-Output.xlsx` | The labelled ground truth — the only place field-level accuracy can actually be scored |
+| `UniCat_Manufacturer_and_Brand_List.xlsx` | 27k approved manufacturer/brand pairs with exact legal casing and ®/™. Until then `MANUFACTURER_NAME` mirrors `BRAND_NAME` |
+| `Unicat_Lov_v1_0_Updated_With_Remarks.xlsx` | ~161k rows constraining attribute values per classpath. Our attributes are currently free text, not LOV-constrained |
+| `Unilog_Master_UOM_Standards…xlsx` | ~500 approved unit abbreviations. We use a hand-built table of ~40 |
+| `UNILOG_INTERNAL_CONTENT_GUIDELINES.docx` | The exact formulas and character limits per field. Ours are reconstructed from the guide's worked example |
+| `Decimal_Fraction.xlsx` | 63 inch conversions (0.5 → 1/2, 50.25 in → 50-1/4 in) |
+| `FAUCETS_LOV.xlsx`, `Fittings_LOV.xlsx` | The two categories specified end-to-end, which the guide recommends as the demo scope |
+
+Consequence, stated plainly: we can show the pipeline is **grounded** (0
+hallucinations across 32 adversarial records) but not yet that it is
+**conformant** — matching approved vocabularies is unmeasurable without the
+vocabularies. The architecture has the seams for it: `normalize.py` is already a
+lookup layer, and `checks.py` already produces per-field findings.
+
 ## Results
 
 All numbers below are from live runs on Google's **free** tier. Model is named
