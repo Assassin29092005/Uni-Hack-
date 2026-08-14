@@ -24,6 +24,161 @@ re-running the same dead end, and that is most of this file's value.
 
 ---
 
+## BUG-012 — An attribute rename silently disarmed the golden set   [FIXED]
+
+**Found:** 2026-08-14, immediately after renaming canonical attribute names to
+Unilog's vocabulary (`current rating` → `amperage rating`). Caught by checking
+what else read those names, not by a failing test — nothing failed, which is the
+whole problem.
+
+**Symptom:** `data/golden.json` expects `forbidden_specs: ["current rating", ...]`
+and `golden.score` matched with `banned.lower() in n` against **normalised**
+spec names. After the rename a model inventing a current rating produces the
+spec `amperage rating`; `"current rating" in "amperage rating"` is False, so the
+trap scored as `abstained_ok`. **A hallucination would have been counted as a
+correct abstention** — the headline metric of the whole harness, silently
+inverted on the exact case it exists to catch.
+
+**Root cause:** two vocabularies compared directly. Expectations are hand-written
+in the record's own wording; the specs they score have been through
+`normalize_specs`. Nothing forced them to agree, so a change to one silently
+broke the join. Identical in shape to BUG-003 (probe scoring API failures as
+detections) and to the `QUANTITY_UNITS` near-miss in the same rename, where
+`checks.unit_problems` keyed on the substring `current` and would have stopped
+firing on every current spec.
+
+**Fix:** `golden._matches()` normalises *both* sides before comparing, and is
+used by `forbidden_specs`, `deferred_specs` and `required_specs` alike. Added
+`"amperage"` to `checks.QUANTITY_UNITS` beside `"current"`.
+
+**Verified:** `test_golden_expectations_survive_an_attribute_rename` — a spec
+named in the post-rename canon is caught by a pre-rename expectation, *and* a
+clean record still scores as an abstention rather than a false hit (an
+instrument needs both directions). `test_unit_check_still_fires_after_the_rename`
+covers the units half.
+
+**Lesson for the next rename:** grep for the old canonical name across
+`data/`, `src/golden.py`, `src/probe.py` and `src/checks.py` before assuming a
+green suite means anything. Every one of those compares strings that normalize
+produces, and none of them fail loudly when a comparison stops matching.
+
+---
+
+## BUG-011 — A part-number collision silently deleted a product   [FIXED]
+
+**Found:** 2026-08-14, building de-duplication (guide step 2) against their
+1000-row sheet.
+
+**Symptom:** `AVM6EV` appears twice, describing two different products:
+
+```
+AVM6EV,AVM6 EV Mini Snip Red,...,Malco Prod (2370)
+AVM6EV,AVM7 EV Mini Snip Green,...,Malco Prod (2370)
+```
+
+`ingest_csv` yields both. Neither is in the catalog, so `is_done` lets both
+through, both are enriched — **paying twice** — and then `store.save` upserts on
+`sku`, so whichever thread finished last wins. Final state: one product, no
+warning, a 50% chance of the wrong description, and a catalog that quietly
+contains 999 of the 1000 rows it was given.
+
+**Root cause:** `sku` is the primary key, and nothing ever checked that the
+input agreed with that assumption. The resumability design (`is_done` before any
+model call) is orthogonal — it dedupes against *the catalog*, never against the
+current batch.
+
+**Fix:** `src/dedup.py`, called from `pipeline.run` before the resumability gate
+and before any model call. Three verdicts, and only one of them merges anything:
+
+- `identical` (same SKU, every field equal) → keep one. Provably lossless.
+- `collision` (same SKU, fields differ) → **held back from enrichment**, with a
+  `save_error` audit row. We cannot store both under one key and have no grounds
+  to choose, so refusing is the only honest answer — and it is cheaper, since
+  the old behaviour paid for an enrichment it then discarded.
+- `shared_content` (different SKU, identical input text) → enriched, flagged.
+
+**Why not merge the third case:** `52C3-5/8-UPC`, `52C14-5/8-UPC` and `52C3-UPC`
+all read `4x4 1G Box Cover`. They are genuinely different parts whose
+descriptions are too sparse to tell apart. Merging would delete two products;
+ignoring would ship three identical catalog pages. Flagging is the only answer
+that loses nothing, and it is the "needs human review" surface the brief calls a
+genuinely valuable feature.
+
+**Verified:** `test_dedup_finds_exactly_the_known_cases_in_the_shipped_sheet`
+runs against the real 1000-row file and pins both known cases plus the count
+(998 enrichable — 1000 minus *both* sides of the collision). Three unit tests
+cover the verdicts in isolation, including that case and punctuation are not a
+difference in product and that genuinely different descriptions are not grouped.
+
+---
+
+## BUG-010 — Four defects found by diffing our export against their sheet   [FIXED]
+
+**Found:** 2026-08-14, auditing the pipeline against the organisers' Solution
+Guide with two real Delivery Format rows in hand for the first time. All four
+were invisible to the test suite because every test asserted our own behaviour;
+none compared against theirs.
+
+**Symptom / root cause, one per defect:**
+
+**D1 — Dept/Class/Fine fabricated from the Classpath.** `delivery.to_row` split
+the Classpath three ways into those columns. Their sheet shows the two are
+*different taxonomies*: Dept/Class/Fine `Appliances / Large Appliances /
+Dishwashers` sits beside Classpath `Appliances & Consumer Electronics>Kitchen
+Appliances>Built-In Dishwashers`. The former is the distributor's own coarser
+hierarchy, supplied on their 200-item input sheet — so we were overwriting a
+given value with a plausible wrong one, and shipping three columns that no
+provenance row covered. The 6-column input we had carried no such columns, which
+is why nothing looked wrong locally.
+
+**D2 — Classpath separator.** We wrote ` > `; their sheet writes `>`.
+
+**D3 (NOT FIXED — see HANDOVER)** — attribute slots. Their sheet emits a
+category's full attribute sequence in fixed order, keeping the label with an
+empty value (`Model`, `Plug Type`, `Color` are present-and-blank on the
+dishwasher row). We pack only grounded specs densely. Needs the LOV's per-
+category sequence; unfixable without that file.
+
+**D4 — `export -> seed` silently dropped the input row.** `store.export_all`
+never selected `raw` and `store.seed` never restored it, so the delivery export
+from a seeded catalog blanked `Part_Desc`, the three brand columns and
+`Part_Manuf` — data we were *given*, lost on the exact no-API-key path the demo
+runs on. Verified before the fix: all 17 rows blank in those five columns.
+
+**D5 — Half the generated columns shipped with no provenance.**
+`provenance_rows` listed five columns while `to_row` emitted nine; the four
+description variants and `MANUFACTURER_NAME` went out with no recorded evidence.
+Two hand-maintained lists, and the shorter one was never updated when the
+delivery-format variants landed. This is a breach of the project's one
+non-negotiable rule, caused by exactly the kind of parallel definition
+`CLAUDE.md` warns about for types.
+
+**Fix:**
+1. `delivery.GENERATED_COLUMNS` + `delivery.generated_fields()` — one declared
+   list, indexed rather than returned as a dict, so a column with no source
+   raises `KeyError` on the next export instead of shipping unexplained. Both
+   `to_row` and `provenance_rows` iterate it. (D5)
+2. Dept/Class/Fine joined the passthrough block; the Classpath split is gone. (D1)
+3. `delivery._classpath()` converts the separator at the delivery boundary,
+   leaving the stored form alone — same split as `_title_case`. (D2)
+4. `export_all` selects `raw`, `seed` passes it to `save`. `save` already
+   COALESCEd, so re-seeding a pre-fix dump cannot erase a stored input row. (D4)
+5. `data/demo_catalog.json` re-joined against the committed `data/unilog_demo.csv`
+   to attach `raw` to its 12 Unilog records (see DECISIONS 025).
+
+**Verified:** four new tests, all failing before the fix —
+`test_dept_class_fine_pass_through_and_are_never_derived` (asserts a supplied
+Dept survives *and* that a Classpath does not become one),
+`test_classpath_uses_their_separator`,
+`test_export_seed_round_trip_keeps_the_input_row` (including that a legacy
+raw-less dump does not erase a good row), and
+`test_every_generated_column_carries_provenance` (structural, over
+`GENERATED_COLUMNS`). Live re-export of the 17-record demo catalog: provenance
+rows 117 → 202, the five passthrough columns populated, Dept/Class/Fine
+correctly blank, Classpath `Abrasives>Coated Abrasives>Sanding Discs`.
+
+---
+
 ## BUG-009 — BUG-004's fix had a hole I wrote into it   [FIXED]
 
 **Found:** 2026-08-14, re-scoring the golden set after the delivery-format prompt

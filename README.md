@@ -191,12 +191,11 @@ well-grounded value, or the accuracy numbers stop being comparable
 ## Missing reference data
 
 The Solution Guide describes **eleven** files. Four were in the pack we
-received. The seven below were not, and each one bounds what the pipeline can
-currently claim:
+received, plus **two rows** of the labelled ground truth. The six below are
+still missing, and each one bounds what the pipeline can currently claim:
 
 | Missing file | What it would enable |
 |---|---|
-| `Unilog-Sample_200_Items-Input-vs-Output.xlsx` | The labelled ground truth — the only place field-level accuracy can actually be scored |
 | `UniCat_Manufacturer_and_Brand_List.xlsx` | 27k approved manufacturer/brand pairs with exact legal casing and ®/™. Until then `MANUFACTURER_NAME` mirrors `BRAND_NAME` |
 | `Unicat_Lov_v1_0_Updated_With_Remarks.xlsx` | ~161k rows constraining attribute values per classpath. Our attributes are currently free text, not LOV-constrained |
 | `Unilog_Master_UOM_Standards…xlsx` | ~500 approved unit abbreviations. We use a hand-built table of ~40 |
@@ -204,11 +203,36 @@ currently claim:
 | `Decimal_Fraction.xlsx` | 63 inch conversions (0.5 → 1/2, 50.25 in → 50-1/4 in) |
 | `FAUCETS_LOV.xlsx`, `Fittings_LOV.xlsx` | The two categories specified end-to-end, which the guide recommends as the demo scope |
 
+**What the two ground-truth rows already bought.** Only a fragment of
+`Unilog-Sample_200_Items-Input-vs-Output.xlsx` arrived — 2 of 200 rows,
+committed as `data/ground_truth_delivery.csv`. It was enough to build
+`src/truth.py` and, on its first comparison, to expose four exporter defects
+that 42 passing tests had not: Dept/Class/Fine derived from the Classpath rather
+than passed through, the wrong Classpath separator, the input row dropped on the
+export→seed path, and half the generated columns shipping with no provenance row
+(BUG-010). Every test we had asserted our own behaviour; none compared against
+theirs. The scorer is row-count agnostic — point `--file` at the full sheet and
+it scores all 200.
+
+Two rows can catch a systematic format error, which is exactly what they did.
+They cannot support a headline accuracy percentage, and this README will not
+advertise one until more of that sheet exists.
+
+What they *can* support is an attribution. Scored on 2026-08-14: 3 match,
+12 differs, 26 missing, 3 extra. Roughly 24 of those 41 non-matches are fields
+their rows sourced from the manufacturer's own website — the URL is in their own
+`MFR URL` column — and which appear nowhere in the 6-column input we were given.
+We abstained on every one, with a written reason attached. That is the designed
+behaviour, and it puts a number on the cost of the one pipeline step we have not
+built: **enrichment from manufacturer sources is not a refinement, it is the
+majority of the remaining gap.**
+
 Consequence, stated plainly: we can show the pipeline is **grounded** (0
 hallucinations across 32 adversarial records) but not yet that it is
 **conformant** — matching approved vocabularies is unmeasurable without the
 vocabularies. The architecture has the seams for it: `normalize.py` is already a
-lookup layer, and `checks.py` already produces per-field findings.
+lookup layer, `checks.py` already produces per-field findings, and `truth.py` is
+already the scorer those would be measured by.
 
 ## Results
 

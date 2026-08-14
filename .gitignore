@@ -32,3 +32,7 @@ Gmail - Ready to build_ Here's Your Game Plan & Submission Guide.pdf
 UniHack Solution Guide.pdf
 Unihack_ Expected Output - Delivery Format.csv
 Unihack_ Sample Dataset - Input.csv
+
+# Fetched manufacturer pages. Regenerated on demand by src/sources.py; caching
+# them makes a re-run free, committing them would vendor someone else's content.
+data/cache/

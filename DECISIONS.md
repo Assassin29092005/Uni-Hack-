@@ -585,3 +585,145 @@ submissions to show, as its own number.
 
 **Cost accepted:** Two check entry points to remember. The exporter prints
 format compliance on every run so it cannot be forgotten.
+
+---
+
+## 025 — Ground truth gets its own scorer, separate from the golden set (2026-08-14)
+
+**Context:** Two real Delivery Format rows arrived (PDSH4816AF, WDTS7024RZ) —
+the first labelled data from the client rather than from us. `golden.py` already
+scores enrichment, so the cheap move is to add them to `data/golden.json`.
+
+**Decision:** A separate module, `src/truth.py`, scoring the *delivery row* (via
+`delivery.to_row`) against their CSV. The golden set is untouched.
+
+**Why:** They measure different things and must not share a number. `golden.py`
+asks "did the model invent anything?" against expectations **we** wrote, which
+DECISIONS 016 requires to be verifiable from the record's own input — a
+deliberately weak, self-authored bar. `truth.py` asks "does our output match what
+the client actually wants?", which only their sheet can answer and which covers
+formatting we could never grade ourselves (their separator, their brand symbols,
+their attribute labels). Merging them would let a strong score on one hide a weak
+score on the other, and would break the 32-record golden baseline's
+comparability. Scoring the exported row rather than the `Product` also puts the
+exporter itself under test — D1 and D2 (BUG-010) were exporter bugs that no
+model-level comparison would have caught.
+
+**Sub-decisions:**
+- **Only the columns we generate are scored.** All 252 would drown the signal in
+  ~170 columns nothing in a 6-column input could ground, and a submission could
+  look 70% accurate for emitting blanks. Passthrough columns are excluded for
+  the mirror reason: scoring a copy measures the CSV reader.
+- **`missing` is not `differs`.** A blank where they have a value is a gap; a
+  different value is an error that reaches a buyer. One "accuracy" number
+  averaging them hides the distinction this whole project is built on, so
+  `differs` is the headline and the rest sit beside it.
+- **® and ™ are not normalised away.** The guide requires the approved name
+  "symbols and all", so folding them would turn a real conformance failure into
+  a silent pass. `_is_near` labels a punctuation-only difference instead of
+  forgiving it.
+- **Attributes compare by label, not by slot.** Their slot 3 and ours holding
+  different attributes is an ordering difference, not two wrong values.
+
+**Cost accepted:** Slot-order conformance goes unmeasured (their sheet fixes the
+sequence per category; that lives in the LOV we do not have — BUG-010 D3). And
+two labelled rows is a thin sample: it can catch a systematic format error, which
+is what it just did, but it cannot support an accuracy percentage anyone should
+quote. The module is row-count agnostic — `--file` at the full 200-row sheet
+scores all of it.
+
+**Also decided:** `data/demo_catalog.json` gained a `raw` field per record, by
+joining the existing export against the committed `data/unilog_demo.csv` on
+`Mfg_Part_Num`. This looks like it violates "don't hand-write demo_catalog.json"
+(HANDOVER) but does not: that rule protects against fabricating *enriched*
+records, and nothing here was authored — the input rows are the distributor's
+own, already in the repo, re-attached by a key join. The 5 pre-Unilog synthetic
+records keep `raw: null` because no such input row exists for them.
+
+---
+
+## 026 — Canonical attribute names are Unilog's, not ours (2026-08-14)
+
+**Context:** `normalize.ATTRIBUTE_ALIASES` canonicalised voltage attributes to
+`operating voltage`. Their Delivery Format sheet calls the column
+`Voltage Rating`. `truth.py` also caught us emitting `Finish Material` on one
+record and `Material` on another for the same value.
+
+**Decision:** Canonical form is the label observed in **their** sheet. Only
+labels actually seen there are targets — the full controlled vocabulary is the
+LOV, which we do not have.
+
+**Why:** A normalization layer exists to make values comparable. Ours made them
+internally consistent and externally unmatchable: a perfectly grounded voltage
+landed under a label their sheet has no column for. Normalising toward the
+grading vocabulary is what turns a right value into a right cell.
+
+**Cost accepted:** Records enriched before the rename keep the old names until
+re-enriched. Worse, the rename silently disarmed two instruments that matched on
+the old substrings — `checks.QUANTITY_UNITS` keyed on `current`, and
+`golden.score` compared hand-written expectations against normalised spec names.
+Both are fixed (BUG-012) and both are now test-guarded, but the general hazard
+stands: **anything that string-matches a canonical name is a silent dependency
+of this table.** Grep before renaming.
+
+---
+
+## 027 — De-duplication classifies; it does not merge (2026-08-14)
+
+**Context:** Guide step 2. The assumption going in was "a 1000-row supplier
+export is full of duplicates, collapse them".
+
+**Decision:** `src/dedup.py` returns three verdicts and merges only rows that
+are identical in every field. SKU collisions are **held back from enrichment**;
+records sharing a description are enriched and flagged.
+
+**Why:** The assumption was wrong on the real data. There are two collisions in
+1000 rows and neither should be merged. `AVM6EV` names two different snips, so
+merging picks one product and deletes the other (BUG-011). The three `4x4 1G Box
+Cover` rows are distinct parts with identically sparse descriptions, so merging
+deletes two products while ignoring ships three identical pages. Flagging is the
+only action that loses nothing, and it is the "needs human review" surface the
+brief calls a genuinely valuable feature.
+
+**Rejected:** fuzzy/similarity matching. It would catch near-duplicates
+("1 Gang" vs "1G") but needs a threshold, and the only instrument that could
+tune one is the labelled 200-row sheet. Guessing a threshold risks merging
+distinct parts, which is the expensive direction of this trade.
+
+**Cost accepted:** exact matching only, so near-duplicates go undetected. It
+finds every real case in the shipped data and never fires falsely.
+
+---
+
+## 028 — Manufacturer sourcing: policy in code, no bot-protection workarounds (2026-08-14)
+
+**Context:** `truth.py` attributed ~24 of 41 field mismatches to data their rows
+took from manufacturer websites. Building guide step 5. Both sources their
+ground-truth rows cite refuse automated access — frigidaire.com times out,
+whirlpool.com returns 403.
+
+**Decision:** `src/sources.py` enforces the sourcing hierarchy in code
+(`classify`) before any fetch, respects `robots.txt`, identifies itself with a
+plain honest user agent, and treats a 403 or a timeout as a refusal it records
+rather than an obstacle it routes around. Local documents in `data/documents/`
+take priority over the web.
+
+**Why:** The guidelines make sourcing a rule, not a preference — marketplaces
+and distributor sites are excluded because their content is unattributable, not
+because it is always wrong. Encoding that as a denylist checked before the
+request means a refusal is a logged reason in the audit trail rather than a
+silent gap. And a site declining automated access has given an answer; a project
+whose entire pitch is provenance does not get to disguise its requests.
+
+**Rejected:** an allowlist of manufacturer domains — unenumerable, and it would
+refuse the long tail this catalog is mostly made of. Rejected: browser
+automation to get past JS rendering and bot checks. It is the wrong side of the
+line and it makes the demo depend on defeating a third party's controls.
+
+**Cost accepted:** coverage is bounded by what the operator can supply. Live
+fetching proved out end-to-end (`diablotools.com` fetched and cached;
+`malcoproducts.com` refused by robots.txt and honoured), but modern
+manufacturer sites are JS-rendered — the Diablo homepage yielded 12 characters
+of text. PDFs, which are where the real specs live, need a parser we have not
+wired in. The realistic path to a wide demo is documents dropped into
+`data/documents/`, which is why local files take priority.

@@ -23,6 +23,119 @@ The `Left out` line matters most under a deadline — it separates "not built ye
 
 ---
 
+## FEAT-007 — Guide steps 2 and 5, plus the normalization the scorer asked for   [DONE / PARTIAL]
+
+**Scoped:** The pipeline steps the audit found missing, in the order `truth.py`
+said they mattered. Explicitly NOT in scope: anything needing the six reference
+files we still do not have.
+
+**Why:** Judging outcome 4 (scalable catalog engine) and the guide's own step
+list. Every item here is deterministic or policy — none of it needs quota.
+
+**Progress:**
+  - **De-duplication (step 2)** → DONE. `src/dedup.py`, three verdicts, merges
+    only provably-identical rows. Found and fixed a silent product loss on the
+    real sheet (BUG-011). Wired into `pipeline.run` before the resumability
+    gate. Verified end to end: 5 rows in, collision held back and audited,
+    shared-description group flagged, 3 distinct parts enriched.
+  - **Decimal → fraction** → DONE. `normalize.to_fraction`, every exact 64th,
+    generated rather than transcribed. Was a prompt instruction enforced
+    nowhere, i.e. deterministic work on the wrong side of `CLAUDE.md`'s line.
+    Refuses non-64ths (0.33 stays 0.33) rather than inventing precision.
+  - **Feet** → DONE. Missing from `UNIT_ALIASES` entirely, so "16 ft" fell
+    through the unknown-unit branch and never normalised. Not fraction-
+    converted: their table is inches and extending it would be us inventing.
+  - **Attribute vocabulary** → DONE. Canon is now their label (DECISIONS 026).
+  - **Manufacturer sourcing (step 5)** → PARTIAL. `src/sources.py`: policy,
+    robots.txt, cache, local documents, `--sources` flag, `<document>` block in
+    the prompt with its own provenance rules. Live path proven both ways
+    (fetched diablotools.com; honoured malcoproducts.com's robots.txt).
+    **Not delivering a score improvement yet** — see Left out.
+
+**Verified:** 61 tests. The load-bearing ones: sourcing policy refuses
+marketplaces and junk-in-a-URL-column; document text cannot masquerade as
+`source: input`; `strip_html` drops script/style so the model never reads
+minified JS as specs; dedup pinned against the real 1000-row sheet; golden
+expectations survive the attribute rename.
+
+**Left out:** PDF parsing and per-brand URL templates. Their ground-truth rows
+cite manufacturer PDFs, and both sites they cite refuse automated access, so
+live crawling cannot close the gap on those two records — an operator dropping
+files into `data/documents/` can. No datasheet was fabricated to make the score
+look better; that would be the one unrecoverable own-goal in a project about
+provenance.
+
+---
+
+## FEAT-006 — Field-level accuracy against the client's own rows   [DONE, awaiting 4 API calls]
+
+**Scoped:** An instrument that answers "does our delivery row match theirs?",
+field by field, against the Delivery Format sheet — the metric the brief asks
+for by name ("Field-level accuracy against the 200 known-good rows"). Explicitly
+NOT: a replacement for `golden.py`, a number pooled with it, or anything that
+spends model calls to run.
+
+**Why:** Judging outcome 2 (accuracy & consistency), and the brief's "Show your
+evaluation" point. Until now every test asserted our own behaviour — which is
+why four exporter defects (BUG-010) survived 42 passing tests and a full
+delivery run. The first comparison against their file found all four.
+
+**Design:** `src/truth.py`, scoring `delivery.to_row()` output rather than the
+`Product`, so the exporter is under test too. Four verdicts —
+`match`/`differs`/`missing`/`extra` — with `differs` as the headline, because a
+wrong value reaches a buyer and a blank does not. Attributes compare by label,
+not slot. ®/™ are preserved, not normalised away. Full rationale and the
+rejected "add them to golden.json" option: DECISIONS 025.
+
+**Touches:** `src/truth.py` (new), `src/delivery.py` (`GENERATED_COLUMNS` as the
+shared column list), `data/ground_truth_delivery.csv`,
+`data/ground_truth_input.csv`, `test_pipeline.py`.
+
+**Progress:**
+  - comparator + four verdicts + attribute-by-label → done
+  - `--control`, `--detail`, `--db`, `--file` → done
+  - control wired into the test suite → done, passes (22 columns × 2 records)
+  - **first real score (2026-08-14, gemini-2.5-flash, 4 calls)** → 7% exact
+    agreement: 3 match / 12 differs / 26 missing / 3 extra over 44 comparisons.
+    Diagnostic, not damning — see below.
+
+**What the first score actually said.** It is a *coverage* number. Their rows
+were built from the manufacturer's own site (their `MFR URL` column names it),
+and carry brand, series, voltage, amperage, mounting, dimensions and sound level
+that appear nowhere in the 6-column input. We abstained on all of them, with a
+written reason each — the pipeline behaving exactly as designed. Attribution of
+the 41 non-matches:
+
+| Cause | Count | Fixable by |
+|---|---|---|
+| No manufacturer-source step (guide step 5) | ~24 missing + 10 differs | building it |
+| Classpath leaf vocabulary (`Dishwashers` vs `Built-In Dishwashers`) | 2 differs | the LOV |
+| Attribute label drift (`Finish Material` vs `Material`) | 1 extra + 1 missing | `ATTRIBUTE_ALIASES`, free |
+| Attribute outside their vocabulary (`Condition` = "Display Only") | 2 extra | the LOV |
+
+The five description variants all differ for one reason: their formula is
+Brand + Series + MPN + Item Type + key attributes, and we have none of those
+beyond the MPN. They are downstream of row 1 of that table, not five separate
+failures.
+
+**The instrument earned its keep on the first run**: the `Finish Material` /
+`Material` drift is a real defect nothing else in the project could have seen,
+and it is a two-line deterministic fix.
+
+**Verified:** `--control` scores their rows against themselves as a clean sweep
+and fails loudly otherwise; `test_scorer_refuses_an_empty_comparison` proves a
+zero-overlap run raises instead of printing "100% accurate (0 records)";
+`test_scorer_separates_wrong_values_from_honest_blanks` pins the four verdicts
+and the punctuation-only annotation; `test_scorer_compares_attributes_by_label_not_by_slot`
+pins ordering-tolerance and that an empty label is not an expectation.
+
+**Left out:** slot-order conformance — their sheet fixes the attribute sequence
+per category and that lives in the LOV we do not have (BUG-010 D3). Worth
+filling the day that file arrives, together with the fixed-sequence exporter.
+Also left out: scoring the ~170 columns we never populate, deliberately.
+
+---
+
 ## FEAT-004 — Deterministic validation, output normalization, demo safety   [DONE]
 
 **Scoped:** Close the gaps between what `CLAUDE.md` claims the system does and

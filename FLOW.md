@@ -2,7 +2,7 @@
 
 How execution actually travels — file to file, function to function, in order.
 
-Last updated: 2026-08-12 23:40 IST
+Last updated: 2026-08-14 (delivery export + ground-truth scorer)
 
 ---
 
@@ -19,7 +19,13 @@ main()                              src/pipeline.py
       ├─ store.connect(db)          src/store.py         creates schema if absent
       ├─ ingest_csv(csv)            src/pipeline.py
       │    └─ normalize_record()    src/normalize.py    ─► list[RawRecord]
+      ├─ dedup.analyse(records)     src/dedup.py         ◄── before any model call
+      │    ├─ unique         ─► enriched
+      │    ├─ collisions     ─► store.save_error, NOT enriched
+      │    └─ shared_content ─► enriched, flagged for review
       ├─ store.is_done(sku)         src/store.py         ◄── the resumability gate
+      ├─ attach_sources(todo)       src/pipeline.py      only for records to enrich
+      │    └─ sources.resolve()     src/sources.py       local doc > web, policy-checked
       ├─ process_batch(todo)        src/enrich.py
       │    ├─ llm.check_ready()     src/llm.py            fail fast on setup problems
       │    └─ ThreadPoolExecutor ─► process()                    per record:
@@ -38,7 +44,9 @@ main()                              src/pipeline.py
 | Stage | Where it lives | LLM? |
 |---|---|---|
 | ingest | `pipeline.ingest_csv` | no |
+| de-duplicate | `dedup.analyse` | no |
 | normalize (in) | `normalize.normalize_record` | no |
+| source (manufacturer docs) | `pipeline.attach_sources` → `sources.resolve` | no |
 | enrich | `enrich.enrich_one` → `llm.structured_call` | **yes** |
 | normalize (out) | `normalize.normalize_specs`, inside `enrich_one` | no |
 | validate | `enrich.validate_one` → `llm.structured_call` | **yes** |
@@ -81,6 +89,19 @@ because `probe.py` measures the LLM validator alone: an instrument that silently
 received rule output would report our lookup tables as the model's judgement.
 `probe.py` therefore calls `validate_one` directly and bypasses the rules;
 `golden.py` calls `process()` and sees both, because it measures the system.
+
+### The input block and the prompt block are not the same string
+
+`RawRecord.as_input_block()` is the distributor's row. `as_prompt_block()` is
+that plus any `<document>` retrieved for it. The model reads the second;
+`checks.unsupported_input_claims` searches the **first**.
+
+That split is load-bearing. The rule asks "did the record say this?", and once a
+datasheet joins the prompt, a haystack built from the whole prompt would accept
+a spec lifted off the manufacturer's page as though the distributor had stated
+it — inverting the one claim the rule exists to falsify. Document-sourced values
+are perfectly legitimate; they just have to say `source: document`, and the
+prompt tells the model so explicitly.
 
 ### Four invariants the flow depends on
 
@@ -146,17 +167,58 @@ The route parameter `page` is why the renderer is called `render_page` — see
 BUG-006, where the two names collided and every catalog request died while the
 whole test suite stayed green.
 
-### Verification harnesses (both cost real API calls)
+### Third entry point: the deliverable
+
+`python -m src.delivery out.csv` → their 252 columns + a provenance sidecar.
 
 ```
-python -m src.probe    probe.main()  -> validate_one() per planted error
-python -m src.golden   golden.main() -> process() per golden record, then score()
+export()                              src/delivery.py
+ ├─ store.connect ─► SELECT sku, data, raw FROM products
+ └─ per record:
+      ├─ to_row(product, raw)
+      │    ├─ passthrough    raw -> Mfg_Part_Num, Part_Desc, the 3 brand
+      │    │                 columns, Part_Manuf, Dept/Class/Fine
+      │    └─ generated_fields(product) -> GENERATED_COLUMNS, via _FORMATTERS
+      ├─ provenance_rows()  ─► the SAME generated_fields list, + every spec
+      └─ checks.delivery_checks() -> format compliance, printed per run
 ```
 
-Both call `enrich.is_unaudited()` on every report before scoring it. A report
-that says "the audit never ran" and one that says "I found three problems" are
-both non-empty issue lists, and an instrument that conflates them scores its own
-API failures as successful detections.
+**`generated_fields` is the load-bearing part.** `to_row` and `provenance_rows`
+iterate one list, so a column cannot ship without a provenance row explaining
+it — they were two hand-maintained lists until BUG-010 D5, and the shorter one
+covered five of the nine columns actually being emitted.
+
+**Passthrough and generated are different categories, not a spectrum.**
+Dept/Class/Fine are the distributor's taxonomy and are *copied*; Classpath is
+ours and is *asserted*. Deriving the first from the second (which this exporter
+did until BUG-010 D1) overwrites supplied data and emits columns nothing
+explains. We owe provenance for what we assert, not for what we were handed.
+
+### Verification harnesses (probe and golden cost real API calls)
+
+```
+python -m src.probe            probe.main()  -> validate_one() per planted error
+python -m src.golden           golden.main() -> process() per golden record, then score()
+python -m src.truth            truth.main()  -> to_row() vs their Delivery Format CSV
+python -m src.truth --control  the same comparator, their rows against themselves
+```
+
+`probe` and `golden` call `enrich.is_unaudited()` on every report before scoring
+it. A report that says "the audit never ran" and one that says "I found three
+problems" are both non-empty issue lists, and an instrument that conflates them
+scores its own API failures as successful detections.
+
+`truth` makes **no** model calls — it reads the stored catalog — and carries the
+same idea in two other forms. Its control (`--control`, also run by the test
+suite) scores their rows against themselves and must come back a clean sweep: a
+comparator that cannot grade a known-good row as correct says nothing about a
+row it grades badly. And a run with no overlapping SKUs raises rather than
+printing "100% accurate (0 records)".
+
+The three answer different questions and their numbers must not be pooled:
+probe asks *does the validator object?*, golden asks *does the model invent?*
+against expectations we wrote, truth asks *does the output match the client's?*
+against expectations they wrote. See DECISIONS 025.
 
 ---
 
