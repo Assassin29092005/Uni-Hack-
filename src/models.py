@@ -88,14 +88,44 @@ class RawRecord(BaseModel):
     # not for what we hand back. Excluded from `as_prompt_block`, so the model
     # still only ever sees the cleaned view.
     raw: dict[str, str] = Field(default_factory=dict)
+    # Manufacturer documentation retrieved for this record, and where from.
+    # Kept separate from `text` on purpose: `text` is the distributor's own
+    # blurb, this is the manufacturer speaking, and the two carry different
+    # provenance (`input` vs `document`). Merging them would make the model
+    # guess which it was reading — and `checks.unsupported_input_claims`
+    # treats everything in the prompt block as the record, so a document's
+    # contents would start counting as things "the input said".
+    document: str = Field(default="")
+    document_source: str = Field(default="")
 
-    def as_prompt_block(self) -> str:
-        """Flatten to the text we actually show the model. Kept here so the
-        prompt and the data model can't disagree about what the model saw."""
+    def as_input_block(self) -> str:
+        """The distributor's record alone — no retrieved documentation.
+
+        Exists so `checks.unsupported_input_claims` can ask "did *the record*
+        say this?" and get an honest answer. Once a document joins the prompt,
+        a haystack built from the whole prompt would quietly accept a value the
+        manufacturer's page stated as though the input had stated it, which is
+        the precise claim that check exists to falsify.
+        """
         lines = [f"SKU: {self.sku}"]
         lines += [f"{k}: {v}" for k, v in self.attributes.items() if v]
         if self.text:
             lines.append(f"Free text: {self.text}")
+        return "\n".join(lines)
+
+    def as_prompt_block(self) -> str:
+        """Flatten to the text we actually show the model. Kept here so the
+        prompt and the data model can't disagree about what the model saw."""
+        lines = [self.as_input_block()]
+        if self.document:
+            # Fenced and labelled so the model can tell manufacturer
+            # documentation from the distributor's row, and cite the source in
+            # its evidence rather than claiming the record stated it.
+            lines.append(
+                f'<document source="{self.document_source}">\n'
+                f"{self.document}\n"
+                f"</document>"
+            )
         return "\n".join(lines)
 
 

@@ -18,7 +18,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import llm, store
+from . import dedup, llm, sources, store
 from .enrich import process_batch
 from .models import Product, RawRecord
 from .normalize import normalize_key, normalize_record
@@ -63,12 +63,55 @@ def ingest_csv(path: Path) -> list[RawRecord]:
     return records
 
 
-def run(csv_path: Path, db_path: Path, force: bool = False, workers: int | None = None) -> dict:
+def attach_sources(records: list[RawRecord], allow_web: bool) -> dict[str, int]:
+    """Retrieve manufacturer documentation for each record, in place.
+
+    Runs before enrichment so the document is part of what the model reads, and
+    reports refusals as loudly as successes: "frigidaire.com declined automated
+    access" is a fact a reviewer needs, and it is why a field is blank. Silence
+    here would look identical to "no source was ever sought".
+    """
+    tally = {"document": 0, "web": 0, "none": 0}
+    for record in records:
+        result = sources.resolve(record.sku, record.raw, allow_web=allow_web)
+        if result.ok:
+            record.document = result.text
+            record.document_source = result.url
+            tally[result.origin] = tally.get(result.origin, 0) + 1
+        else:
+            tally["none"] += 1
+            if "refused" in result.reason or "unavailable" in result.reason:
+                print(f"  {record.sku}: no source — {result.reason[:150]}")
+    return tally
+
+
+def run(csv_path: Path, db_path: Path, force: bool = False, workers: int | None = None,
+        use_sources: bool = False) -> dict:
     """Enrich a CSV end to end. Skips SKUs already in the database unless
     --force, which is the whole of the resumability story: interrupt it, run it
     again, and it picks up where it stopped without re-paying for finished work."""
     conn = store.connect(db_path)
     records = ingest_csv(csv_path)
+
+    # De-duplication runs before the resumability gate and before any model
+    # call. `store.save` upserts on SKU, so two rows sharing a part number used
+    # to be enriched twice and then silently collapse to whichever finished
+    # last — paying double to lose a product. See src/dedup.py.
+    duplicates = dedup.analyse(records)
+    print(f"Ingested {len(records)} row(s): {duplicates.summary()}")
+    for line in dedup.describe(duplicates):
+        print(line)
+    records = duplicates.unique
+
+    # Held-back collisions never reach the catalog, but they must not vanish
+    # either: an audit row is the difference between "we refused this" and "we
+    # never saw it".
+    for sku, group in duplicates.collisions.items():
+        store.save_error(
+            conn, sku,
+            f"SKU collision: {len(group)} input rows describe different products "
+            f"under one part number. Not enriched — needs human resolution."
+        )
 
     if force:
         todo = records
@@ -83,6 +126,13 @@ def run(csv_path: Path, db_path: Path, force: bool = False, workers: int | None 
         stats = store.summary(conn)
         conn.close()
         return stats
+
+    # Sourcing runs only on records we are about to enrich — fetching a page
+    # for a record `is_done` will skip would spend network on nothing.
+    if use_sources or sources.DOCUMENTS.exists():
+        tally = attach_sources(todo, allow_web=use_sources)
+        print(f"Sources: {tally['document']} local document(s), {tally['web']} fetched, "
+              f"{tally['none']} without")
 
     workers = workers or llm.workers_default()
     print(f"Enriching {len(todo)} record(s) via {llm.describe()}, {workers} worker(s)...")
@@ -174,6 +224,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--force", action="store_true", help="re-enrich records already stored")
     parser.add_argument("--workers", type=int, default=None,
                         help="default depends on the provider's rate limit")
+    parser.add_argument("--sources", action="store_true",
+                        help="fetch manufacturer documentation for each record "
+                             "(local files in data/documents/ are always used)")
     parser.add_argument("--show", metavar="SKU", help="print one stored record with provenance")
     parser.add_argument("--export", metavar="PATH", type=Path,
                         help="dump the enriched catalog to JSON")
@@ -193,7 +246,8 @@ def main(argv: list[str] | None = None) -> int:
     if not args.csv:
         parser.error("give a CSV to enrich, or use --show / --export / --seed")
     try:
-        run(args.csv, args.db, force=args.force, workers=args.workers)
+        run(args.csv, args.db, force=args.force, workers=args.workers,
+            use_sources=args.sources)
     except llm.ProviderError as exc:
         # Setup problems (missing key, Ollama not running) are the user's to
         # fix — a traceback buries the one line that tells them how.

@@ -8,6 +8,7 @@ wrong data rather than an error, which is exactly the kind that survives to the
 demo. Prompt quality is checked against the golden set, not here.
 """
 
+import json
 import tempfile
 from pathlib import Path
 
@@ -89,7 +90,9 @@ def test_normalize_record():
         text="  hydraulic   cylinder  ",
     )
     assert record.sku == "HDX-1"
-    assert record.attributes == {"brand": "Bosch", "operating voltage": "24 V DC"}
+    # "voltage rating", not our old invented "operating voltage" — the canon is
+    # Unilog's label, so a correct value lands in the column they grade.
+    assert record.attributes == {"brand": "Bosch", "voltage rating": "24 V DC"}
     assert record.text == "hydraulic cylinder"
     assert "HDX-1" in record.as_prompt_block()
 
@@ -324,12 +327,349 @@ def test_delivery_row_is_complete_and_refuses_ungrounded_values():
     assert row["Part_Desc"] == "raw text", "the distributor's own text passes through"
     # A low-confidence brand is a blank cell, never a hedged guess.
     assert row["BRAND_NAME"] == ""
-    # Classpath splits into its three levels rather than being asked for 4x.
-    assert row["Dept"] == "Tools" and row["Class"] == "Power Tools" and row["Fine"] == "Drills"
     # Spec -> LABEL/VALUE/UOM triplet, units kept out of the value. Labels are
     # stored lowercase for case-insensitive dedup and Title Cased on the way out
     # to match Unilog house style.
     assert row["ATTRIBUTE_LABEL 1"] == "Thread" and row["ATTRIBUTE_VALUE 1"] == "M8"
+
+
+def test_dept_class_fine_pass_through_and_are_never_derived():
+    """Their sample pairs Dept/Class/Fine "Appliances / Large Appliances /
+    Dishwashers" with Classpath "Appliances & Consumer Electronics>Kitchen
+    Appliances>Built-In Dishwashers" — a different, coarser taxonomy that
+    travels with the input. The exporter used to split the Classpath into these
+    three columns, which overwrites a supplied value with a plausible wrong one
+    and emits three columns no provenance row covers."""
+    from src import delivery
+
+    product = demo_product(category=sourced("Tools > Power Tools > Drills"))
+
+    supplied = delivery.to_row(product, {
+        "Mfg_Part_Num": "ACME-1",
+        "Dept": "Appliances", "Class": "Large Appliances", "Fine": "Dishwashers",
+    })
+    assert supplied["Dept"] == "Appliances", "the distributor's taxonomy must survive"
+    assert supplied["Class"] == "Large Appliances"
+    assert supplied["Fine"] == "Dishwashers"
+    assert supplied["Dept"] != "Tools", "Classpath must not overwrite a supplied Dept"
+
+    # The 6-column input carries no such columns. Blank is the honest answer;
+    # inventing them from a differently-worded hierarchy is not.
+    absent = delivery.to_row(product, {"Mfg_Part_Num": "ACME-1"})
+    assert absent["Dept"] == absent["Class"] == absent["Fine"] == ""
+    assert absent["Classpath"], "Classpath itself is still emitted"
+
+
+def test_classpath_uses_their_separator():
+    """We prompt for ' > ' and store that; their sheet writes a bare '>'."""
+    from src import delivery
+
+    row = delivery.to_row(
+        demo_product(category=sourced("Appliances & Consumer Electronics > "
+                                      "Kitchen Appliances > Built-In Dishwashers")),
+        {"Mfg_Part_Num": "ACME-1"},
+    )
+    assert row["Classpath"] == ("Appliances & Consumer Electronics>"
+                                "Kitchen Appliances>Built-In Dishwashers")
+
+
+def test_every_generated_column_carries_provenance():
+    """The one non-negotiable rule, asserted structurally. The sidecar once
+    covered five of the ten columns being shipped: the four description
+    variants and MANUFACTURER_NAME went out with no recorded evidence."""
+    from src import delivery
+
+    product = demo_product(
+        invoice_desc=sourced("ACME DRILL M8"),
+        mobile_desc=sourced("Acme, Drill, ACME-1"),
+        short_desc=sourced("Acme ACME-1 Drill"),
+        retail_desc=sourced("Cordless Drill, M8 Thread"),
+    )
+    raw = {"Mfg_Part_Num": "ACME-1", "Part_Desc": "raw text", "Dept": "Tools"}
+
+    row = delivery.to_row(product, raw)
+    explained = {p["column"] for p in delivery.provenance_rows(product, raw)}
+
+    for column, _ in delivery.generated_fields(product):
+        assert row[column], f"{column} should be populated by this fixture"
+        assert column in explained, f"{column} ships with no provenance row"
+
+    # Passthrough is the deliberate exception: we owe evidence for what we
+    # assert, not for what the distributor handed us.
+    assert "Part_Desc" not in explained and "Dept" not in explained
+
+    # The declared column list and the field mapping must stay in step. A
+    # column in the tuple with no source already raises KeyError; this catches
+    # the reverse, where a mapped field is silently never emitted or scored.
+    assert tuple(c for c, _ in delivery.generated_fields(product)) == delivery.GENERATED_COLUMNS
+
+
+def test_sourcing_policy_excludes_distributors_and_marketplaces():
+    """The guidelines require the manufacturer's own site or documentation and
+    exclude marketplaces and distributor sites explicitly. A spec lifted from a
+    marketplace listing carries a manufacturer's authority it never had, so the
+    rule is enforced in code before a fetch is attempted."""
+    from src.sources import classify
+
+    for denied in ("https://www.amazon.com/dp/B01", "https://www.grainger.com/product/1",
+                   "https://www.homedepot.com/p/2", "https://octopart.com/search"):
+        allowed, reason = classify(denied)
+        assert not allowed, f"{denied} must be refused"
+        assert "distributor/marketplace" in reason
+
+    for allowed_url in ("https://www.frigidaire.com/en/p/PDSH4816AF",
+                        "https://www.whirlpool.com/manuals/x.html",
+                        "https://www.3m.com/product/775L"):
+        ok, _ = classify(allowed_url)
+        assert ok, f"{allowed_url} is a manufacturer source and must be allowed"
+
+    # Label matching, not substring: a brand whose name contains a denied word
+    # is not that company.
+    assert classify("https://www.myamazonbrand.com/p/1")[0] is True
+    # Junk in, refusal out — never a silent allow.
+    for junk in ("", "not a url", "ftp://files.example.com/x", "mailto:a@b.c"):
+        assert classify(junk)[0] is False
+
+
+def test_document_text_cannot_masquerade_as_the_input():
+    """Attaching manufacturer documentation puts text in the prompt that the
+    distributor's record never contained. `unsupported_input_claims` asks "did
+    THE RECORD say this?" — if its haystack included the document, a spec lifted
+    off a datasheet could claim `source: input` and pass, inverting the one
+    thing that rule checks."""
+    record = RawRecord(sku="P-1", attributes={"description": "Dishwasher SS"})
+    record.document = "Sound Level: 47 dBA. Wash cycles: 5. Voltage: 120 V."
+    record.document_source = "https://www.frigidaire.com/x"
+
+    assert "47 dBA" in record.as_prompt_block(), "the model must see the document"
+    assert "47 dBA" not in record.as_input_block(), "the record did not say it"
+    assert 'source="https://www.frigidaire.com/x"' in record.as_prompt_block()
+
+    lying = demo_product(specs=[
+        Spec(name="sound level", value="47", unit="dBA", source="input",
+             evidence="stated in the record", confidence=0.9)])
+    issues = checks.unsupported_input_claims(record, lying)
+    assert any(i.field == "spec:sound level" for i in issues), (
+        "a document-sourced value claiming source 'input' must still be caught"
+    )
+
+    # The same value, honestly labelled, is not an issue — the check polices
+    # the provenance claim, not the value.
+    honest = demo_product(specs=[
+        Spec(name="sound level", value="47", unit="dBA", source="document",
+             evidence="document: 'Sound Level: 47 dBA'", confidence=0.9)])
+    assert not any(i.field == "spec:sound level"
+                   for i in checks.unsupported_input_claims(record, honest))
+
+
+def test_strip_html_drops_script_and_style_content():
+    """A model shown minified JavaScript will find 'specifications' in it."""
+    from src.sources import strip_html
+
+    html = ("<html><head><style>.a{color:red}</style>"
+            "<script>var specs={voltage:'999V'};</script></head>"
+            "<body><h1>Model X</h1><p>Sound&nbsp;Level: 47 dBA</p></body></html>")
+    text = strip_html(html)
+    assert "999V" not in text and "color:red" not in text
+    assert "Model X" in text and "Sound Level: 47 dBA" in text
+
+
+def test_golden_expectations_survive_an_attribute_rename():
+    """The golden expectations are hand-written in the record's own wording;
+    the specs they score have been through `normalize_specs`. The day
+    "current rating" started canonicalising to "amperage rating", the substring
+    match stopped firing — and a hallucinated current rating scored as a clean
+    abstention. An instrument that a rename can silently disarm is BUG-003
+    wearing a different hat."""
+    from src.golden import score
+
+    invented = demo_product(specs=[
+        Spec(name=normalize_key("Current Rating"), value="5", unit="A",
+             source="inference", evidence="typical for this part", confidence=0.9),
+    ])
+    assert invented.specs[0].name == "amperage rating", "precondition: the rename happened"
+
+    # The expectation is still written the pre-rename way, as a human would.
+    result = score(invented, {"forbidden_specs": ["current rating"]})
+    assert result["hallucinations"], (
+        "a forbidden spec went undetected because the canonical name changed"
+    )
+    assert result["abstained_ok"] == 0
+
+    # And the honest case still scores as an abstention rather than a false hit.
+    clean = demo_product(specs=[])
+    assert not score(clean, {"forbidden_specs": ["current rating"]})["hallucinations"]
+    assert score(clean, {"forbidden_specs": ["current rating"]})["abstained_ok"] == 1
+
+
+def test_dedup_holds_back_sku_collisions_instead_of_overwriting():
+    """The real failure in their 1000-row sheet: AVM6EV appears twice
+    describing two different products. `store.save` upserts on SKU, so both
+    were enriched — paying twice — and the second silently overwrote the first.
+    A pipeline that loses a product without saying so is worse than one that
+    refuses it."""
+    from src import dedup
+
+    records = [
+        normalize_record("AVM6EV", {"Part_Desc": "AVM6 EV Mini Snip Red"}),
+        normalize_record("AVM6EV", {"Part_Desc": "AVM7 EV Mini Snip Green"}),
+        normalize_record("SAFE-1", {"Part_Desc": "Sanding Belt"}),
+    ]
+    report = dedup.analyse(records)
+
+    assert [r.sku for r in report.unique] == ["SAFE-1"], "a collision must not be enriched"
+    assert set(report.collisions) == {"AVM6EV"}
+    assert len(report.collisions["AVM6EV"]) == 2
+    assert "AVM6EV" in report.flagged_skus
+    assert any("COLLISION" in line for line in dedup.describe(report))
+
+
+def test_dedup_collapses_only_provably_identical_rows():
+    from src import dedup
+
+    same = [normalize_record("D-1", {"Part_Desc": "Box Cover"}),
+            normalize_record("D-1", {"Part_Desc": "Box Cover"})]
+    report = dedup.analyse(same)
+    assert len(report.unique) == 1 and report.collapsed == 1
+    assert not report.collisions, "identical rows are not a collision"
+
+
+def test_dedup_flags_shared_descriptions_without_merging_them():
+    """Three different part numbers, one description — their box covers. These
+    are distinct parts whose input text is too sparse to tell apart. Merging
+    would delete two products; ignoring would ship three identical pages."""
+    from src import dedup
+
+    records = [normalize_record(sku, {"Part_Desc": "4x4 1G Box Cover"})
+               for sku in ("52C3-5/8-UPC", "52C14-5/8-UPC", "52C3-UPC")]
+    report = dedup.analyse(records)
+
+    assert len(report.unique) == 3, "distinct parts must all still be enriched"
+    assert not report.collisions
+    assert len(report.shared_content) == 1
+    assert report.flagged_skus == {"52C3-5/8-UPC", "52C14-5/8-UPC", "52C3-UPC"}
+
+    # Case and punctuation are not a difference in product.
+    mixed = [normalize_record("A-1", {"Part_Desc": "4x4 1G Box Cover"}),
+             normalize_record("A-2", {"Part_Desc": "4X4  1g  box cover!"})]
+    assert len(dedup.analyse(mixed).shared_content) == 1
+
+    # Genuinely different products must not be grouped.
+    distinct = [normalize_record("B-1", {"Part_Desc": "Sanding Belt"}),
+                normalize_record("B-2", {"Part_Desc": "Cut-Off Disc"})]
+    assert not dedup.analyse(distinct).shared_content
+
+
+def test_dedup_finds_exactly_the_known_cases_in_the_shipped_sheet():
+    """Against the real 1000-row input, not a fixture. Guards the claim the
+    README makes: two collisions, and both are reported rather than merged."""
+    from src import dedup
+
+    sheet = Path("Unihack_ Sample Dataset - Input.csv")
+    if not sheet.exists():
+        return  # the full sheet is not in every clone
+
+    report = dedup.analyse(ingest_csv(sheet))
+    assert set(report.collisions) == {"AVM6EV"}, "the known part-number collision"
+    assert report.collapsed == 0, "no byte-identical rows in this sheet"
+    groups = {tuple(sorted(skus)) for skus in report.shared_content.values()}
+    assert ("52C14-5/8-UPC", "52C3-5/8-UPC", "52C3-UPC") in groups
+    # 1000 rows minus BOTH sides of the one collision — neither is enriched,
+    # because the ambiguity is about which product owns the part number.
+    assert len(report.unique) == 998
+
+
+def test_ground_truth_scorer_control():
+    """The instrument's control: their own rows, scored against themselves,
+    must come back a clean sweep. A comparator that cannot score a known-good
+    row as correct tells you nothing about a row it grades badly — the same
+    reason `probe.py` carries a clean control record.
+
+    This is the cheap half of `python -m src.truth --control`, run every time
+    the suite runs rather than when somebody remembers the flag."""
+    from src import truth
+
+    if not truth.GROUND_TRUTH.exists():
+        return  # their sheet is not in every clone; skip rather than fail
+
+    result = truth.score(None, truth.GROUND_TRUTH, control=True)
+    assert result["records"] == result["ground_truth_records"] > 0
+    for verdict in ("differs", "missing", "extra"):
+        assert result["tally"][verdict] == 0, (
+            f"comparator reports {result['tally'][verdict]} {verdict} on a row "
+            f"scored against itself; every accuracy figure it prints is unsafe"
+        )
+    assert result["tally"]["match"] > 0, "a control that compares nothing is not a control"
+
+
+def test_scorer_refuses_an_empty_comparison():
+    """"100% accurate (0 records)" is the failure mode this guards. An
+    instrument with no overlap must refuse, not average over an empty set."""
+    from src import truth
+
+    if not truth.GROUND_TRUTH.exists():
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        empty = Path(tmp) / "empty.db"
+        store.connect(empty).close()
+        try:
+            truth.score(empty, truth.GROUND_TRUTH)
+        except SystemExit as exc:
+            assert "nothing to score" in str(exc)
+        else:
+            raise AssertionError("scored an empty catalog instead of refusing")
+
+
+def test_scorer_separates_wrong_values_from_honest_blanks():
+    """A blank where the truth has a value is a gap; a different value is an
+    error that reaches a buyer. Collapsing them into one accuracy number hides
+    the only distinction this project is built around."""
+    from src import truth
+
+    theirs = {"BRAND_NAME": "FRIGIDAIRE®", "Product Name": "Dishwasher",
+              "Classpath": "A>B>C", "LONG_DESC1": "Long copy."}
+    ours = {"BRAND_NAME": "FRIGIDAIRE",     # symbol missing -> differs, near
+            "Product Name": "Dryer",        # wrong -> differs
+            "Classpath": "",                # abstained -> missing
+            "LONG_DESC1": "Long copy.",     # -> match
+            "MOBILE_DESC": "Acme, Dryer"}   # they left it blank -> extra
+    columns = ["BRAND_NAME", "Product Name", "Classpath", "LONG_DESC1", "MOBILE_DESC"]
+
+    by_column = {v["column"]: v for v in truth.compare_row(ours, theirs, columns)}
+    assert by_column["LONG_DESC1"]["verdict"] == "match"
+    assert by_column["Product Name"]["verdict"] == "differs"
+    assert by_column["Classpath"]["verdict"] == "missing", "a blank is not a wrong answer"
+    assert by_column["MOBILE_DESC"]["verdict"] == "extra"
+
+    # A missing ® is still wrong — the guide requires the approved name "symbols
+    # and all" — but it is a different repair from naming the wrong company, so
+    # it is labelled rather than forgiven.
+    assert by_column["BRAND_NAME"]["verdict"] == "differs"
+    assert by_column["BRAND_NAME"]["near"] is True
+    assert by_column["Product Name"]["near"] is False
+
+
+def test_scorer_compares_attributes_by_label_not_by_slot():
+    """Their slot 3 and our slot 3 holding different attributes is an ordering
+    difference, not two wrong values."""
+    from src import truth
+
+    theirs = {"ATTRIBUTE_LABEL 1": "Voltage Rating", "ATTRIBUTE_VALUE 1": "120",
+              "ATTRIBUTE_UOM 1": "V",
+              "ATTRIBUTE_LABEL 2": "Sound Level", "ATTRIBUTE_VALUE 2": "47",
+              "ATTRIBUTE_UOM 2": "dBA",
+              # A label their category defines but nobody filled in. It asserts
+              # nothing, so it must not be scored as an expectation.
+              "ATTRIBUTE_LABEL 3": "Color", "ATTRIBUTE_VALUE 3": "", "ATTRIBUTE_UOM 3": ""}
+    ours = {"ATTRIBUTE_LABEL 1": "Sound Level", "ATTRIBUTE_VALUE 1": "47",
+            "ATTRIBUTE_UOM 1": "dBA",
+            "ATTRIBUTE_LABEL 2": "Voltage Rating", "ATTRIBUTE_VALUE 2": "240",
+            "ATTRIBUTE_UOM 2": "V"}
+
+    by_column = {v["column"]: v for v in truth.compare_row(ours, theirs, [])}
+    assert by_column["ATTRIBUTE[sound level]"]["verdict"] == "match", "order is not an error"
+    assert by_column["ATTRIBUTE[voltage rating]"]["verdict"] == "differs"
+    assert "ATTRIBUTE[color]" not in by_column, "an empty label is not an expectation"
 
 
 def test_unit_split_only_fires_on_known_units():
@@ -343,6 +683,72 @@ def test_unit_split_only_fires_on_known_units():
     # Real units still split, with a space, as Unilog requires.
     assert normalize_value("24VDC") == "24 V DC"
     assert normalize_value("25mm") == "25 mm"
+
+
+def test_decimal_inches_become_fractions():
+    """"Manufacturers publish decimals; trade buyers search fractions." Their
+    Decimal_Fraction table is every exact 64th, so it is generated rather than
+    transcribed — same numbers, no copying errors, no file we were not sent."""
+    from src.normalize import to_fraction
+
+    assert to_fraction("50.25") == "50-1/4"
+    assert to_fraction("0.5") == "1/2", "no leading zero — '1/2', never '0-1/2'"
+    assert to_fraction("2.75") == "2-3/4"
+    assert to_fraction("0.015625") == "1/64", "the first row of their table"
+    assert to_fraction("0.984375") == "63/64", "the last row of their table"
+    assert to_fraction("12") == "12", "a whole number has no fraction part"
+
+    # The refusals matter more than the conversions. A third of an inch is not
+    # a 64th; rounding it to 21/64 would invent precision the source never had.
+    assert to_fraction("0.33") is None
+    assert to_fraction("abc") is None
+    assert to_fraction("-1") is None
+
+    # End to end, in both shapes: inline with the unit, and as the delivery
+    # format's separate VALUE/UOM pair.
+    assert normalize_value("50.25 in") == "50-1/4 in"
+    assert normalize_value("0.5 inch") == "1/2 in"
+    # Feet are left decimal: their table is inches, and extending it is ours to
+    # invent. But feet must still normalise as a unit — they used to fall
+    # through the unknown-unit branch entirely.
+    assert normalize_value("16 feet") == "16 ft"
+    assert normalize_value("1.5 ft") == "1.5 ft"
+    # A range stays a range. "1/2-3/4 in" is ambiguous between a range and a
+    # fraction and guessing is worse than leaving the decimals visible.
+    assert normalize_value("10-30 V") == "10-30 V"
+
+    spec = normalize_specs([Spec(name="Depth With Door Open", value="50.25", unit="in",
+                                 source="input", evidence="e", confidence=0.9)])[0]
+    assert (spec.value, spec.unit) == ("50-1/4", "in"), "their VALUE/UOM shape"
+
+
+def test_attribute_labels_normalise_to_unilogs_vocabulary():
+    """Canonical form is THEIR label, not one we invented. `truth.py` caught us
+    emitting "Finish Material" on one record and "Material" on the other for
+    the same value, missing on both."""
+    assert normalize_key("Finish Material") == "material"
+    assert normalize_key("Material Construction") == "material"
+    assert normalize_key("Colour") == "color"
+    # Our old canon was "operating voltage" — defensible, and unmatchable
+    # against a sheet that says "Voltage Rating".
+    assert normalize_key("Voltage") == "voltage rating"
+    assert normalize_key("Operating Voltage") == "voltage rating"
+    assert normalize_key("Current Rating") == "amperage rating"
+
+
+def test_unit_check_still_fires_after_the_rename():
+    """`checks.QUANTITY_UNITS` matched current specs on the substring
+    "current". Renaming the canonical attribute to Unilog's "amperage rating"
+    removed that substring, and a rule that silently matches nothing is
+    indistinguishable from a rule that finds no problems."""
+    product = demo_product(specs=[
+        Spec(name=normalize_key("Current Rating"), value="15", unit="mm",
+             source="input", evidence="e", confidence=0.9),
+    ])
+    issues = checks.unit_problems(product)
+    assert any(i.severity == "unit" for i in issues), (
+        "a current rated in mm must still be caught after the rename"
+    )
 
 
 def test_attribute_labels_use_unilog_title_case():
@@ -448,6 +854,44 @@ def test_store_roundtrip_and_idempotency():
 
         assert store.summary(conn)["products"] == 1
         conn.close()  # Windows will not delete the temp dir while the file is open
+
+
+def test_export_seed_round_trip_keeps_the_input_row():
+    """`export -> seed` is the no-API-key demo path, and it used to drop `raw`.
+    The delivery export then blanked Part_Desc, the three brand columns,
+    Part_Manuf and Dept/Class/Fine — data we were *given*, lost on the exact
+    path a machine with no key runs."""
+    from src import delivery
+
+    raw = {"Mfg_Part_Num": "TEST-1", "Part_Desc": "3/8 CPLG BRS 150#",
+           "Part_Manuf": "Freud Inc (2435)", "Dept": "Abrasives"}
+    with tempfile.TemporaryDirectory() as tmp:
+        source = store.connect(Path(tmp) / "a.db")
+        store.save(source, demo_product(), ValidationReport(issues=[], verdict="pass"), raw=raw)
+        entries = store.export_all(source)
+        source.close()
+
+        assert entries[0]["raw"] == raw, "the input row must survive the export"
+
+        target = store.connect(Path(tmp) / "b.db")
+        store.seed(target, entries, source="test")
+        row = target.execute("SELECT raw FROM products WHERE sku = 'TEST-1'").fetchone()
+        assert json.loads(row["raw"]) == raw, "and must survive the seed"
+
+        # The whole point: the passthrough columns arrive in the deliverable.
+        product = store.load(target, "TEST-1")
+        exported = delivery.to_row(product, json.loads(row["raw"]))
+        assert exported["Part_Desc"] == "3/8 CPLG BRS 150#"
+        assert exported["Part_Manuf"] == "Freud Inc (2435)"
+        assert exported["Dept"] == "Abrasives"
+
+        # An older dump has no `raw` key at all. Seeding it must not erase a
+        # good input row that is already stored, and must not crash.
+        legacy = [{k: v for k, v in entries[0].items() if k != "raw"}]
+        store.seed(target, legacy, source="legacy")
+        kept = target.execute("SELECT raw FROM products WHERE sku = 'TEST-1'").fetchone()
+        assert json.loads(kept["raw"]) == raw, "re-seeding an old dump erased the input row"
+        target.close()
 
 
 def test_schemas_survive_json_schema_conversion():
@@ -574,7 +1018,7 @@ def test_normalize_specs_canonicalises_and_dedupes():
         spec("WT", "3.4", "KG"),
     ])
     names = [s.name for s in out]
-    assert names == ["operating voltage", "weight"], "aliases and casing collapse"
+    assert names == ["voltage rating", "weight"], "aliases and casing collapse"
     assert out[0].unit == "V DC" and out[1].unit == "kg", "units canonicalised"
     assert out[0].confidence == 0.95, "the higher-confidence copy of a duplicate wins"
 

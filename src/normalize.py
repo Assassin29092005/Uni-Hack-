@@ -51,11 +51,32 @@ ATTRIBUTE_ALIASES = {
     "long description": "description",
     "cat": "category",
     "product type": "category",
-    "voltage": "operating voltage",
-    "op voltage": "operating voltage",
     "temp range": "operating temperature",
     "wt": "weight",
     "dims": "dimensions",
+    # --- Unilog's own attribute labels -------------------------------------
+    # Canonical form is THEIR label, not one we invented. Their Delivery Format
+    # sheet is the vocabulary the output is graded against, so normalising
+    # toward it is what makes a correct value land in the right column; our
+    # previous canon ("operating voltage") was defensible and unmatchable.
+    # Only labels actually observed in their sheet are targets here — the full
+    # controlled vocabulary is the LOV, which we do not have.
+    "voltage": "voltage rating",
+    "op voltage": "voltage rating",
+    "operating voltage": "voltage rating",
+    "amperage": "amperage rating",
+    "current": "amperage rating",
+    "current rating": "amperage rating",
+    # `src/truth.py` caught this one: the same value went out as "Finish
+    # Material" on one record and "Material" on the other, costing a match on
+    # both. Two spellings of one attribute is precisely what this table is for.
+    "finish material": "material",
+    "material construction": "material",
+    "housing material": "material",
+    "colour": "color",
+    "mounting": "mounting type",
+    "noise level": "sound level",
+    "wash cycles": "number of wash cycles",
 }
 
 # Canonical unit symbols. Keys are lowercased; the values are the SI-ish symbol
@@ -65,6 +86,10 @@ UNIT_ALIASES = {
     "cm": "cm", "centimeter": "cm", "centimetre": "cm",
     "m": "m", "meter": "m", "metre": "m", "meters": "m", "metres": "m",
     "in": "in", "inch": "in", "inches": "in", '"': "in",
+    # Feet are all over this catalog (decking is sold as 1x6-16'), and were
+    # missing entirely — so "16 ft" fell through the unknown-unit branch and
+    # never normalised at all.
+    "ft": "ft", "foot": "ft", "feet": "ft", "'": "ft",
     "kg": "kg", "kilogram": "kg", "kilograms": "kg", "kgs": "kg",
     "g": "g", "gram": "g", "grams": "g",
     "lb": "lb", "lbs": "lb", "pound": "lb", "pounds": "lb",
@@ -81,6 +106,61 @@ UNIT_ALIASES = {
 
 # "24VDC", "1.5 mm", "10-30 V" — number(s) then a unit word.
 _VALUE_UNIT = re.compile(r"^\s*([\d.,]+(?:\s*[-–x×]\s*[\d.,]+)?)\s*([a-zA-Z°\"·\-]+)\s*$")
+
+# Inches only. Their Decimal_Fraction.xlsx is explicitly "63 exact inch
+# conversions", and the guide's examples are both inches. Feet are commonly
+# written decimal in this trade (a 16 ft board is not a 16 ft board in
+# sixteenths), so converting them would be us extending their rule rather than
+# applying it.
+_FRACTIONAL_UNITS = {"in"}
+
+# Manufacturers publish 50.25; trade buyers search 50-1/4. Their
+# Decimal_Fraction.xlsx is 63 rows, 1/64 through 63/64 — i.e. every exact
+# 64th — so the table is generated rather than transcribed. Same numbers,
+# no copying errors, and it needs no file we were not sent.
+_INCH_DENOMINATOR = 64
+
+# Floating point makes 0.1 + 0.2 != 0.3, so "is this an exact 64th?" cannot be
+# an equality test. A 64th is 0.015625 wide; this tolerance is ~1/1000th of
+# that, tight enough that 0.33 (a third, not a 64th) is left alone.
+_FRACTION_TOLERANCE = 1e-5
+
+
+def to_fraction(value: str) -> str | None:
+    """'50.25' -> '50-1/4', '0.5' -> '1/2'. None when it is not an exact 64th.
+
+    Returning None rather than the nearest fraction is the whole design. 0.33 in
+    is a third of an inch, which no imperial rule marks and no buyer searches;
+    rounding it to 21/64 would invent a precision the source never had. An
+    unconvertible decimal stays a decimal — visibly unconverted, which a human
+    can see, rather than silently wrong.
+    """
+    text = value.strip().replace(",", "")
+    try:
+        number = float(text)
+    except ValueError:
+        return None
+    if number < 0:
+        return None
+
+    whole = int(number)
+    remainder = number - whole
+    numerator = round(remainder * _INCH_DENOMINATOR)
+    if abs(remainder * _INCH_DENOMINATOR - numerator) > _FRACTION_TOLERANCE:
+        return None  # not an exact 64th — leave it alone
+
+    if numerator == 0:
+        return str(whole)
+    if numerator == _INCH_DENOMINATOR:  # 0.99999 rounding up into the next inch
+        return str(whole + 1)
+
+    # Reduce: 16/64 is 1/4, and nobody writes 16/64.
+    from math import gcd
+    divisor = gcd(numerator, _INCH_DENOMINATOR)
+    numerator, denominator = numerator // divisor, _INCH_DENOMINATOR // divisor
+    # Their format: whole and fraction joined by a hyphen ("50-1/4"), bare
+    # fraction when there is no whole part ("1/2", never "0-1/2").
+    return f"{whole}-{numerator}/{denominator}" if whole else f"{numerator}/{denominator}"
 
 
 def normalize_key(key: str) -> str:
@@ -127,8 +207,15 @@ def normalize_value(value: str) -> str:
     # more likely to be part of a code than a unit we forgot to list.
     if unit.strip().lower().rstrip(".") not in UNIT_ALIASES:
         return text
-    number = re.sub(r"\s*[-–x×]\s*", "-", number)  # "10 - 30" -> "10-30"
-    return f"{number} {normalize_unit(unit)}".strip()
+    canonical = normalize_unit(unit)
+    # Imperial lengths convert before the range rewrite, and only when there is
+    # no range: "1/2-3/4 in" is ambiguous between a range and a fraction, and
+    # guessing which would be worse than leaving the decimals visible.
+    if canonical in _FRACTIONAL_UNITS and not re.search(r"[-–x×]", number):
+        number = to_fraction(number) or number
+    else:
+        number = re.sub(r"\s*[-–x×]\s*", "-", number)  # "10 - 30" -> "10-30"
+    return f"{number} {canonical}".strip()
 
 
 # Supplier exports use sentinel strings to mean "this field is empty". They are
@@ -201,6 +288,13 @@ def normalize_specs(specs: list) -> list:
             copy.unit = normalize_unit(copy.unit)
         if copy.value:
             copy.value = normalize_value(copy.value)
+            # A spec carries its unit in its own field, so the value arrives as
+            # a bare "50.25" that `normalize_value` cannot recognise as inches.
+            # The unit field is what says so — this is the shape the delivery
+            # format uses (VALUE "50-1/4", UOM "in"), so it is the shape that
+            # has to convert.
+            if copy.unit in _FRACTIONAL_UNITS:
+                copy.value = to_fraction(copy.value) or copy.value
         canonical.append(copy)
 
     best: dict[tuple, object] = {}

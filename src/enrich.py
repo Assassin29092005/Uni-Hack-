@@ -64,6 +64,15 @@ voltage. Extract nothing from it.
 Set `source` to what actually happened: `input` for the record's own fields, \
 `document` for attached text, `inference` for your own product knowledge.
 
+A `<document source="...">` block is manufacturer documentation retrieved for \
+this part. It is a legitimate source and usually the richest one — use it. But \
+it is NOT the distributor's record, so:
+- values taken from it are `source: document`, never `source: input`
+- the `evidence` must quote the document and name where it came from
+- if the document describes a DIFFERENT part than the record's part number, \
+  ignore it entirely and say so. A near-miss datasheet is worse than none, \
+  because everything in it looks authoritative.
+
 Extract specs only where you have grounds. Four solid specs beat twenty padded ones.
 
 OUTPUT FORMAT RULES (Unilog delivery standard). These are house style, not \

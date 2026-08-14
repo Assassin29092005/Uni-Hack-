@@ -41,7 +41,14 @@ from .models import Issue, Product, RawRecord, Sourced
 QUANTITY_UNITS: dict[str, set[str]] = {
     "power supply": {"V", "V DC", "V AC", "kV", "mV"},
     "voltage": {"V", "V DC", "V AC", "kV", "mV"},
+    # "current" and "amperage" both listed: `normalize` canonicalises current
+    # attributes to Unilog's label "amperage rating", which contains neither the
+    # word "current" nor any other key here. Without this entry the unit check
+    # silently stopped firing on every current spec the moment the canonical
+    # name changed — a rule that quietly matches nothing looks identical to a
+    # rule that finds no problems.
     "current": {"A", "mA", "kA", "µA"},
+    "amperage": {"A", "mA", "kA", "µA"},
     "power": {"W", "kW", "mW", "hp", "VA"},
     "frequency": {"Hz", "kHz", "MHz"},
     "weight": {"kg", "g", "lb", "oz", "t"},
@@ -105,9 +112,16 @@ def _unsupported_share(value: str, haystack: str) -> float:
 
 
 def _haystack(record: RawRecord) -> str:
-    """Everything the model was shown, lowercased — the only legitimate source
-    for a value claiming `source: input`."""
-    return record.as_prompt_block().lower()
+    """The distributor's record, lowercased — the only legitimate source for a
+    value claiming `source: input`.
+
+    `as_input_block`, NOT `as_prompt_block`: once manufacturer documentation is
+    attached, the prompt contains text the record never said. Building the
+    haystack from the whole prompt would let a spec lifted off a datasheet claim
+    `source: input` and pass, which inverts the one thing this rule checks.
+    Document-sourced values are legitimate — they just have to say `document`.
+    """
+    return record.as_input_block().lower()
 
 
 def _quantity_for(name: str) -> tuple[str, set[str]] | None:

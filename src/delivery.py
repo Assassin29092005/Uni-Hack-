@@ -65,6 +65,21 @@ def _title_case(label: str) -> str:
     return " ".join(out)
 
 
+def _classpath(value: str) -> str:
+    """Their separator is a bare '>', ours is ' > '.
+
+    The prompt asks the model for ' > ' because spaces make the three levels
+    legible to it and to us, and the stored record keeps that form. Their sheet
+    writes 'Appliances & Consumer Electronics>Kitchen Appliances>Built-In
+    Dishwashers' with no spaces, so the conversion happens here at the delivery
+    boundary — same split as `_title_case` for attribute labels: canonical
+    internal form, required external form, neither compromised.
+    """
+    if not value:
+        return ""
+    return ">".join(part.strip() for part in value.split(">"))
+
+
 def _emit(field: Sourced) -> str:
     """A value only reaches the deliverable if we would stand behind it.
 
@@ -73,6 +88,56 @@ def _emit(field: Sourced) -> str:
     indistinguishable from a right one and propagates into a live catalog.
     """
     return field.value if field.is_grounded and field.value else ""
+
+
+# The delivery columns whose content we generate, in the order we explain them.
+# Declared as data so `src/truth.py` can score exactly the columns we assert
+# without needing a Product in hand, and so the list has one home.
+GENERATED_COLUMNS = (
+    "MANUFACTURER_NAME", "BRAND_NAME", "Product Name", "Classpath",
+    "INVOICE_DESC", "MOBILE_DESC", "SHORT_DESC", "RETAIL_DESC", "LONG_DESC1",
+)
+
+
+def generated_fields(product: Product) -> list[tuple[str, Sourced]]:
+    """Every delivery column whose content WE produced, with its `Sourced`.
+
+    The single list behind both halves of an export: `to_row` writes these
+    columns and `provenance_rows` explains them. They were separate lists once,
+    and the sidecar silently covered five of the ten columns being shipped —
+    the four description variants and MANUFACTURER_NAME went out with no
+    recorded evidence at all. Keeping one list makes that failure impossible
+    rather than merely fixed.
+
+    Passthrough columns are deliberately absent: Part_Desc and Dept/Class/Fine
+    are the distributor's own data, and we owe provenance for what we assert,
+    not for what we were handed.
+
+    Attributes are not here because they are positional triplets rather than
+    one column each; both halves iterate `product.specs` directly.
+    """
+    by_column: dict[str, Sourced] = {
+        # MANUFACTURER_NAME mirrors the brand until the approved list ships —
+        # see the ponytail note at the foot of this module. It gets its own
+        # provenance row so the mirroring is visible in the audit rather than
+        # implied by two columns happening to agree.
+        "MANUFACTURER_NAME": product.brand,
+        "BRAND_NAME": product.brand,
+        "Product Name": product.name,
+        "Classpath": product.category,
+        # The five descriptions, each generated to its own rule (length,
+        # casing, word order) rather than derived from one another, so an
+        # ungrounded variant is blank instead of a truncation of another.
+        **product.delivery_descriptions,
+    }
+    # Indexing by GENERATED_COLUMNS rather than returning `by_column.items()`
+    # is the point: a column added to that tuple with no source here raises
+    # KeyError on the next export instead of quietly shipping unexplained.
+    return [(column, by_column[column]) for column in GENERATED_COLUMNS]
+
+
+# Columns needing more than `_emit` on the way out.
+_FORMATTERS = {"Classpath": lambda field: _classpath(_emit(field))}
 
 
 def to_row(product: Product, raw: dict[str, str] | None = None) -> dict[str, str]:
@@ -99,28 +164,26 @@ def to_row(product: Product, raw: dict[str, str] | None = None) -> dict[str, str
     for column in ("E1_Brand", "Unilog_Brand", "DIB_Brand"):
         row[column] = raw.get(column, "")
 
-    # --- enriched identity ------------------------------------------------
-    brand = _emit(product.brand)
-    row["BRAND_NAME"] = brand
-    row["MANUFACTURER_NAME"] = brand  # no approved manufacturer list shipped; see README
-    row["Product Name"] = _emit(product.name)
+    # Dept/Class/Fine are the DISTRIBUTOR's own taxonomy and travel with the
+    # input, exactly like Part_Desc. They are emphatically not the Classpath
+    # split three ways: their sample pairs Dept/Class/Fine
+    # "Appliances / Large Appliances / Dishwashers" with Classpath
+    # "Appliances & Consumer Electronics>Kitchen Appliances>Built-In
+    # Dishwashers" — a coarser, differently-worded hierarchy. Deriving these
+    # from the Classpath (which this exporter used to do) overwrote a supplied
+    # value with a plausible wrong one and emitted three columns that no
+    # provenance row covered. The 6-column input carries no such columns, so
+    # they come out blank there, which is the honest answer.
+    for column in ("Dept", "Class", "Fine"):
+        row[column] = raw.get(column, "")
 
-    # --- taxonomy ---------------------------------------------------------
-    # Classpath is "A > B > C"; Dept/Class/Fine are its three levels. Splitting
-    # rather than asking the model for four separate fields keeps them
-    # consistent by construction — they cannot disagree with each other.
-    classpath = _emit(product.category)
-    row["Classpath"] = classpath
-    levels = [part.strip() for part in classpath.split(">")] if classpath else []
-    for column, level in zip(("Dept", "Class", "Fine"), levels):
-        row[column] = level
-
-    # --- the five descriptions --------------------------------------------
-    # Each is generated to its own rule (length, casing, word order) rather than
-    # derived from one another, so an ungrounded variant is blank instead of a
-    # truncation of a different sentence.
-    for column, field in product.delivery_descriptions.items():
-        row[column] = _emit(field)
+    # --- everything we generated ------------------------------------------
+    # One loop over `generated_fields`, which is also what the provenance
+    # sidecar iterates. That shared list is the point: a column emitted here
+    # but absent there would ship a value with no record of where it came
+    # from, which is the one rule this project does not bend.
+    for column, field in generated_fields(product):
+        row[column] = _FORMATTERS.get(column, _emit)(field)
 
     # --- attributes -> the 50 triplets ------------------------------------
     # Spec(name, value, unit) lines up 1:1 with LABEL/VALUE/UOM. Keeping units
@@ -150,12 +213,7 @@ def provenance_rows(product: Product, raw: dict[str, str] | None = None) -> list
     that are filled.
     """
     part_number = (raw or {}).get("Mfg_Part_Num", "") or product.sku
-    fields: list[tuple[str, Sourced]] = [
-        ("Product Name", product.name),
-        ("BRAND_NAME", product.brand),
-        ("Classpath", product.category),
-        ("LONG_DESC1", product.description),
-    ]
+    fields: list[tuple[str, Sourced]] = list(generated_fields(product))
     fields += [(f"ATTRIBUTE_VALUE ({spec.name})", spec) for spec in product.specs]
 
     return [

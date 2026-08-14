@@ -33,7 +33,7 @@ from pathlib import Path
 from . import llm
 from .enrich import is_unaudited, process
 from .models import Product
-from .normalize import normalize_record
+from .normalize import normalize_key, normalize_record
 
 GOLDEN = Path("data/golden.json")
 SCORES = Path("golden_scores.json")
@@ -85,12 +85,29 @@ def score(product: Product, expect: dict) -> dict:
 
     spec_names = [s.name.lower() for s in product.specs if s.is_grounded]
 
+    def _matches(expectation: str) -> str | None:
+        """Find a spec answering to `expectation`, in ANY spelling of it.
+
+        The expectations were written by hand, in whatever wording the record
+        used; the specs they are compared against have been through
+        `normalize_specs`. When those two vocabularies drifted apart — the day
+        "current rating" started canonicalising to "amperage rating" — this
+        comparison silently stopped matching, and every hallucination it was
+        supposed to catch scored as a clean abstention instead. Normalising
+        both sides is what keeps a rename from quietly disarming the
+        instrument; see BUG-003 for the same failure in a different organ.
+        """
+        wanted = normalize_key(expectation)
+        return next((n for n in spec_names
+                     if wanted in n or expectation.lower() in n
+                     or wanted in normalize_key(n)), None)
+
     # Specs the input never mentions. The sharpest hallucination test: these are
     # real, well-known attributes of the part, so the model plausibly "knows"
     # them and must still refuse, because this record did not state them.
     for banned in expect.get("forbidden_specs", []):
         result["abstained_total"] += 1
-        hit = next((n for n in spec_names if banned.lower() in n), None)
+        hit = _matches(banned)
         if hit:
             result["hallucinations"].append(f"spec {hit!r} invented (not in input)")
         else:
@@ -102,7 +119,7 @@ def score(product: Product, expect: dict) -> dict:
     # the model to fill in a plausible number for it. Deferred is not known.
     for deferred in expect.get("deferred_specs", []):
         result["abstained_total"] += 1
-        hit = next((n for n in spec_names if deferred.lower() in n), None)
+        hit = _matches(deferred)
         if hit:
             result["hallucinations"].append(
                 f"spec {hit!r} filled in, but the input defers it (no value given)")
@@ -111,7 +128,7 @@ def score(product: Product, expect: dict) -> dict:
 
     for required in expect.get("required_specs", []):
         result["grounded_total"] += 1
-        if any(required.lower() in n for n in spec_names):
+        if _matches(required):
             result["grounded_ok"] += 1
         else:
             result["misses"].append(f"no spec matching {required!r}")

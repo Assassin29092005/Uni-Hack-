@@ -165,13 +165,21 @@ def export_all(conn: sqlite3.Connection) -> list[dict]:
     UI then has real, model-produced content with its real timestamps, and makes
     zero API calls to show it.
     """
-    rows = conn.execute("SELECT sku, data, updated_at FROM products ORDER BY sku").fetchall()
+    rows = conn.execute(
+        "SELECT sku, data, raw, updated_at FROM products ORDER BY sku"
+    ).fetchall()
     out = []
     for row in rows:
         report = load_report(conn, row["sku"])
         out.append({
             "sku": row["sku"],
             "product": json.loads(row["data"]),
+            # The input row travels with the record. Without it the delivery
+            # export from a seeded catalog leaves the distributor's own columns
+            # (Part_Desc, the three brand columns, Part_Manuf, Dept/Class/Fine)
+            # blank — data we were *given*, lost on the one path that runs
+            # without an API key, which is the path the demo uses.
+            "raw": json.loads(row["raw"]) if row["raw"] else None,
             # A record with no stored report predates the audit trail; an empty
             # pass is the honest reading, not an invented set of findings.
             "report": json.loads(report.model_dump_json()) if report else
@@ -192,7 +200,10 @@ def seed(conn: sqlite3.Connection, entries: list[dict], source: str) -> int:
     for entry in entries:
         product = Product.model_validate(entry["product"])
         report = ValidationReport.model_validate(entry["report"])
-        save(conn, product, report, at=entry.get("enriched_at"))
+        # `.get`, not `["raw"]`: dumps written before the round-trip was fixed
+        # have no raw key, and `save` COALESCEs None onto whatever is already
+        # stored — so re-seeding an old export never erases a good input row.
+        save(conn, product, report, at=entry.get("enriched_at"), raw=entry.get("raw"))
         with conn:
             conn.execute(
                 "INSERT INTO audit (sku, stage, detail, created_at) VALUES (?, ?, ?, ?)",
