@@ -188,6 +188,30 @@ kept off the confidence path on purpose: a formatting rule must not downgrade a
 well-grounded value, or the accuracy numbers stop being comparable
 (DECISIONS 024).
 
+## Deploying the live prototype
+
+The UI is **read-only** — it makes no model calls, so a deployment needs **no
+API key and no quota**. `catalog.db` is gitignored, so the app seeds itself from
+the committed `data/demo_catalog.json` on first boot.
+
+Any host that reads a `Procfile` (Railway, Render, Heroku, Fly) works:
+
+```
+web: python -m src.app
+```
+
+Build command: `pip install -r requirements.txt`. Nothing else to configure —
+the app binds `0.0.0.0` on `$PORT` when the platform injects one, and falls back
+to `127.0.0.1:8000` locally.
+
+Three things that would otherwise break this deploy, all fixed and test-guarded:
+
+| Trap | Symptom if missed |
+|---|---|
+| `fastapi`/`uvicorn` absent from requirements | clean host installs fine, then `ImportError` at start |
+| binding `127.0.0.1` | container starts, health check can't reach it, platform kills it — reads as a crash loop with empty logs |
+| empty `catalog.db` | UI renders "No products yet" in front of judges |
+
 ## Missing reference data
 
 The Solution Guide describes **eleven** files. Four were in the pack we

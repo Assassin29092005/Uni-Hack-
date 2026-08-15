@@ -1154,6 +1154,58 @@ def test_page_window_clamps_instead_of_erroring():
     assert page_window(250, 0, per_page=100) == (0, 1, 3)
 
 
+def test_requirements_cover_what_the_app_imports():
+    """The live prototype is a submission item, and `fastapi`/`uvicorn` were
+    imported by src/app.py but absent from requirements.txt — it only ran here
+    because this machine happened to have them. A clean host would install from
+    requirements and then fail at import."""
+    required = Path("requirements.txt").read_text(encoding="utf-8").lower()
+    for package in ("fastapi", "uvicorn", "pydantic"):
+        assert package in required, f"{package} is imported but not in requirements.txt"
+
+
+def test_app_binds_the_host_port_when_deployed():
+    """A PaaS injects $PORT and requires a bind on 0.0.0.0. Binding loopback
+    makes the container unreachable, so the health check fails and the instance
+    is killed — which surfaces as a crash loop with nothing in the logs."""
+    source = Path("src/app.py").read_text(encoding="utf-8")
+    assert 'os.getenv("PORT"' in source, "app must read $PORT"
+    assert '"0.0.0.0"' in source, "app must bind all interfaces when PORT is set"
+    assert 'uvicorn.run(app, host=host, port=port' in source, (
+        "uvicorn must use the resolved host/port, not hardcoded values")
+
+
+def test_seed_on_boot_fills_an_empty_catalog_and_never_overwrites():
+    """catalog.db is gitignored, so a fresh deploy has no data and the UI would
+    render 'No products yet' in the one place it is being judged."""
+    import json as _json
+
+    from src import app as app_module
+
+    with tempfile.TemporaryDirectory() as tmp:
+        db = Path(tmp) / "fresh.db"
+        original = store.DB_PATH
+        store.DB_PATH = db
+        try:
+            export = _json.loads(Path("data/demo_catalog.json").read_text(encoding="utf-8"))
+            assert export, "data/demo_catalog.json must ship with records"
+
+            app_module.seed_if_empty()
+            conn = store.connect()
+            seeded = conn.execute("SELECT COUNT(*) n FROM products").fetchone()["n"]
+            conn.close()
+            assert seeded == len(export), "boot seed must populate an empty catalog"
+
+            # Second call must be a no-op: never clobber a real enrichment.
+            app_module.seed_if_empty()
+            conn = store.connect()
+            again = conn.execute("SELECT COUNT(*) n FROM products").fetchone()["n"]
+            conn.close()
+            assert again == seeded, "seeding twice must not duplicate or overwrite"
+        finally:
+            store.DB_PATH = original
+
+
 def test_ui_routes_render_against_a_real_database():
     """The routes were only ever smoke-tested by hand, and a unit test of their
     helpers cannot catch a route that doesn't run at all: adding the `?page=`

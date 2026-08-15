@@ -1,6 +1,14 @@
 pydantic>=2.10
 
+# Web UI and JSON API (src/app.py). Required to serve the live prototype —
+# these were imported but missing from this file, so a clean host installed
+# from requirements and then failed at import.
+fastapi>=0.115
+uvicorn>=0.30
+
 # Pick one provider (see src/llm.py). Gemini is the default: free tier, no card.
+# None of these are needed to SERVE the UI — it is read-only and makes no model
+# calls, so a deployment can install them or not.
 google-genai>=1.0      # LLM_PROVIDER=gemini
 ollama>=0.4            # LLM_PROVIDER=ollama    (also needs the Ollama app running)
 # anthropic>=0.120     # LLM_PROVIDER=anthropic (paid)

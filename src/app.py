@@ -16,6 +16,7 @@ so every interpolation goes through `esc()`. Untrusted text into HTML is how you
 get a `<script>` tag in a product description.
 """
 
+from contextlib import asynccontextmanager
 from html import escape as _escape
 
 from fastapi import FastAPI
@@ -25,7 +26,15 @@ from . import llm, store
 from .enrich import is_unaudited
 from .models import Product, Sourced
 
-app = FastAPI(title="Product Intelligence")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Runs once before the first request. `seed_if_empty` is defined at the
+    # bottom of this file; the reference resolves at call time, not import time.
+    seed_if_empty()
+    yield
+
+
+app = FastAPI(title="Product Intelligence", lifespan=lifespan)
 
 # Rows per page. The catalog is meant to hold 10k records, and rendering all of
 # them into one HTML string is how a "scalable catalog engine" demo stops being
@@ -352,8 +361,46 @@ def api_product(sku: str):
     })
 
 
+def seed_if_empty() -> None:
+    """Populate an empty catalog from the committed export, once, at boot.
+
+    `catalog.db` is gitignored, so a fresh deploy starts with nothing and the UI
+    would render "No products yet" — the demo failing in the one place it is
+    being judged. `data/demo_catalog.json` IS committed, and seeding makes zero
+    model calls, so a host needs no API key and no quota to serve the catalog.
+
+    Deliberately conditional: it never overwrites a catalog that already has
+    rows, so running locally after a real enrichment is unaffected.
+    """
+    from pathlib import Path
+
+    conn = store.connect()
+    try:
+        if conn.execute("SELECT COUNT(*) n FROM products").fetchone()["n"]:
+            return
+        export = Path("data/demo_catalog.json")
+        if not export.exists():
+            print("empty catalog and no data/demo_catalog.json — UI will be blank")
+            return
+        import json
+
+        count = store.seed(conn, json.loads(export.read_text(encoding="utf-8")),
+                           source=str(export))
+        print(f"seeded {count} record(s) from {export} (no API calls)")
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
+    import os
+
     import uvicorn
 
-    print("Catalog UI  ->  http://127.0.0.1:8000")
-    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="warning")
+    # Hosts inject the port and expect a bind on all interfaces. Binding
+    # 127.0.0.1 makes the app unreachable from outside the container: the
+    # platform's health check fails and the instance is killed, which shows up
+    # as a crash loop with nothing useful in the logs.
+    host = os.getenv("HOST", "0.0.0.0" if os.getenv("PORT") else "127.0.0.1")
+    port = int(os.getenv("PORT", "8000"))
+    print(f"Catalog UI  ->  http://{'127.0.0.1' if host == '0.0.0.0' else host}:{port}")
+    uvicorn.run(app, host=host, port=port, log_level="warning")
