@@ -1,0 +1,19 @@
+# Render blueprint — deploys the read-only catalog UI.
+#
+# The service needs NO environment variables and NO API key: the UI makes zero
+# model calls, and `src.app` seeds itself from the committed
+# `data/demo_catalog.json` on first boot because `catalog.db` is gitignored.
+#
+# Render injects $PORT and expects a bind on 0.0.0.0; `src/app.py` reads both.
+#
+# Note on the free plan: the instance sleeps after ~15 minutes idle, so the
+# first request after a quiet spell takes roughly 30-60s to wake. Load the URL
+# once before anyone judges it.
+services:
+  - type: web
+    name: product-intelligence
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m src.app
+    healthCheckPath: /
