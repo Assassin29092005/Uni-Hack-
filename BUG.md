@@ -24,6 +24,58 @@ re-running the same dead end, and that is most of this file's value.
 
 ---
 
+## BUG-013 — `document` provenance was being self-awarded   [FIXED]
+
+**Found:** 2026-08-14, auditing what `Source` values the stored catalog actually
+contains, while checking a claim for the deck that "no code path fills document
+or web".
+
+**Symptom:** 12 of 122 valued fields across 19 records claim `source: document`.
+No document had ever been retrieved for any of them. Their evidence gives the
+game away:
+
+```
+PDSH4816AF  name = "Dishwasher"
+            [document, confidence 0.95] Free text: 'PDSH4816AF Dishwasher SS'
+```
+
+That is the `Part_Desc` column. The correct source is `input`.
+
+**Root cause:** `Source` is a `Literal` in the schema, so the model may emit any
+of the four values, and nothing checked that the record could support the one it
+picked. `unsupported_input_claims` polices `input` and only `input` — a field
+could escape it entirely by labelling itself `document`, which is the *stronger*
+claim. The tightest rule in the file was bypassable by upgrading your own
+provenance.
+
+**Why it stopped being cosmetic:** harmless while no documents existed, because
+`document` was just a synonym for "the free-text column". `src/sources.py` makes
+real documents possible, and now the label is the only thing distinguishing a
+genuine datasheet citation from the model renaming the distributor's blurb. A
+provenance system whose strongest label can be self-awarded is not a provenance
+system.
+
+**Fix:** `checks.undocumented_provenance`, in `run_checks`. When
+`record.document` is empty, any field claiming `document` or `web` is flagged,
+with the outcome split by whether the value is actually in the record:
+
+- value present → a mislabel of real data. Flagged, **not** retracted; the value
+  is grounded and only its paperwork is wrong.
+- value absent → an invented citation. Retracted to 0.0. A fabricated spec
+  attributed to a datasheet that does not exist is the confident hallucination
+  this project refuses, wearing the most authoritative label available.
+
+**Verified:** `test_document_provenance_requires_an_actual_document` covers all
+four quadrants — mislabel keeps its confidence, invented citation goes to zero,
+and both fall silent once a document is attached. Also asserts the rule is wired
+into `run_checks` rather than merely importable.
+
+**Not done:** the 12 existing records still carry the bad label; they were
+enriched before the rule existed. They clear on the next `--force` re-enrich,
+which is already queued for the MOBILE_DESC fix.
+
+---
+
 ## BUG-012 — An attribute rename silently disarmed the golden set   [FIXED]
 
 **Found:** 2026-08-14, immediately after renaming canonical attribute names to

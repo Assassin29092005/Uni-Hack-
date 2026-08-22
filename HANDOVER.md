@@ -29,7 +29,7 @@ behaviour, so a self-consistent wrong format stayed green indefinitely.
   the pipeline working as designed. ~24 of the 41 non-matches are the missing
   manufacturer-source step, not a reasoning failure. See "Next up" item 1.
 - Golden set: 0 hallucinations, 201/201 abstention, 135/140 grounding (96%).
-- **61 tests pass** (was 42 at the start of the day).
+- **62 tests pass** (was 42 at the start of the day).
 
 Deadline: **23 August 2026, 11:59 PM IST.**
 
@@ -112,8 +112,15 @@ The three "not" rows are still the submission risk, not the code.
   Rheem makes water heaters; Frigidaire is Electrolux. The guide predicted this
   ("at least one row where the manufacturer and brand look mismatched") and says
   noticing it is a strength. Do not tune the pipeline toward reproducing it.
-- ~165 of 252 columns stay blank. Correct — nothing in a 6-column input grounds
-  UPC, UNSPSC or asset filenames — but say it before a judge asks.
+- **Blank columns, measured — the old "~165" was invented and wrong.** Two
+  different true numbers, and a deck should use the first:
+  - **81 of 252 no code path can ever fill.** UPC/EAN/GTIN, UNSPSC, price,
+    packaging, dimensions, warranty, country of origin, ITEM_FEATURES_1-20,
+    every asset column, and the six URL columns. Counted, not estimated:
+    reachable = 12 passthrough + 9 generated + 150 attribute slots = 171.
+  - **217 of 252 are blank in the current 19-record export** (35 ever
+    populated), because most records ground fewer than 50 attributes.
+  Both are correct answers to different questions. Say which one you mean.
 - Free-tier quota ~20 requests/day/model; 2 calls per record.
 - `src/delivery.py` has no `--db` flag (use `CATALOG_DB=`); `pipeline` and
   `truth` both do.

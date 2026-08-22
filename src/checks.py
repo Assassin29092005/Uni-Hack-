@@ -7,7 +7,7 @@ it identically every time, for free, and — the part that matters on free-tier
 quota — **even when the API call failed entirely**. A record whose validation
 pass died still gets audited by everything in this file.
 
-Four rules, each aimed at a failure this project has actually observed rather
+Six rules, each aimed at a failure this project has actually observed rather
 than one we imagined:
 
 1. `unsupported_input_claims` — a field whose `source` is `input` but whose value
@@ -18,9 +18,14 @@ than one we imagined:
    never did. Deliberately limited to specs: naming the likely manufacturer or
    family from a series prefix is legitimate inference, inventing its dimensions
    is not.
-3. `unit_problems` — a dimensioned quantity carrying a unit from the wrong family
+3. `brand_not_in_record` — an inferred brand the record never names. Its own
+   rule because a wrong manufacturer is the most expensive error in this job.
+4. `undocumented_provenance` — a field citing a `document` or the `web` when no
+   document was retrieved. Found in the stored catalog: 12 fields claimed
+   `document` while quoting the description column at themselves.
+5. `unit_problems` — a dimensioned quantity carrying a unit from the wrong family
    (current rated in mm), or carrying no unit at all.
-4. `contradictory_specs` — two specs that normalize to the same attribute and
+6. `contradictory_specs` — two specs that normalize to the same attribute and
    disagree about the value.
 
 Everything here returns `Issue` objects, the same type the LLM validator
@@ -220,6 +225,60 @@ def brand_not_in_record(record: RawRecord, product: Product) -> list[Issue]:
         suggested_confidence=0.0)]
 
 
+def undocumented_provenance(record: RawRecord, product: Product) -> list[Issue]:
+    """A field citing a document when no document was attached.
+
+    Found by auditing the stored catalog: 12 fields claimed `source: document`
+    with evidence like "Free text: 'PDSH4816AF Dishwasher SS'". No document was
+    ever retrieved for that record — the model was using `document` to mean
+    "the description column", which is `input`.
+
+    Harmless-looking until `src/sources.py` made real documents possible. Now
+    the label is the only thing distinguishing a genuine datasheet citation from
+    the model renaming the distributor's own blurb, and a provenance system
+    whose strongest label can be self-awarded is not a provenance system.
+
+    Two outcomes, because these are different failures:
+
+    - the value IS in the record — a mislabel of real data. Flagged, not
+      retracted: the value is grounded and only its paperwork is wrong, and
+      retracting a correct value teaches nobody anything.
+    - the value is NOT in the record — an invented citation, the worst case in
+      the whole taxonomy. A fabricated spec attributed to a datasheet that does
+      not exist is precisely the confident hallucination this project refuses,
+      dressed in the most authoritative label available. Retracted to 0.0.
+    """
+    if record.document:
+        return []  # a document is attached; citing it is legitimate
+
+    haystack = _haystack(record)
+    issues = []
+    named: list[tuple[str, Sourced]] = [
+        ("name", product.name), ("brand", product.brand),
+        ("category", product.category), ("description", product.description),
+    ]
+    named += [(f"spec:{s.name}", s) for s in product.specs]
+
+    for field, sourced in named:
+        if sourced.source not in ("document", "web") or not sourced.value:
+            continue
+        invented = _unsupported_share(sourced.value, haystack) > UNSUPPORTED_SHARE
+        issues.append(Issue(
+            field=field, severity="unsupported",
+            detail=(
+                f"claims source {sourced.source!r}, but no document was retrieved "
+                f"for this record and the value does not appear in it either — "
+                f"the citation is invented."
+                if invented else
+                f"claims source {sourced.source!r}, but no document was retrieved "
+                f"for this record. The value is in the input, so this is a "
+                f"mislabel: the correct source is 'input'."
+            ),
+            suggested_confidence=0.0 if invented else sourced.confidence,
+        ))
+    return issues
+
+
 def unit_problems(product: Product) -> list[Issue]:
     """Dimensioned quantities with the wrong unit family, or none at all.
 
@@ -355,6 +414,7 @@ def run_checks(record: RawRecord, product: Product) -> list[Issue]:
         *unsupported_input_claims(record, product),
         *identifier_decoded_specs(record, product),
         *brand_not_in_record(record, product),
+        *undocumented_provenance(record, product),
         *unit_problems(product),
         *contradictory_specs(product),
     ]

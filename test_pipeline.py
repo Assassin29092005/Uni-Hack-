@@ -404,6 +404,51 @@ def test_every_generated_column_carries_provenance():
     assert tuple(c for c, _ in delivery.generated_fields(product)) == delivery.GENERATED_COLUMNS
 
 
+def test_document_provenance_requires_an_actual_document():
+    """Auditing the stored catalog found 12 fields claiming `source: document`
+    with evidence like "Free text: 'PDSH4816AF Dishwasher SS'". No document was
+    ever retrieved — the model used `document` to mean the description column.
+
+    Harmless until `sources.py` made real documents possible; now the label is
+    the only thing separating a genuine datasheet citation from the model
+    renaming the distributor's blurb. A provenance system whose strongest label
+    can be self-awarded is not a provenance system."""
+    record = RawRecord(sku="P-1", attributes={"description": "Dishwasher SS"})
+    assert not record.document, "precondition: nothing was retrieved"
+
+    # Value IS in the record: a mislabel of real data. Flagged, not retracted —
+    # the value is grounded and only its paperwork is wrong.
+    mislabelled = demo_product(name=Sourced(
+        value="Dishwasher", source="document", confidence=0.95,
+        evidence="Free text: 'PDSH4816AF Dishwasher SS'"))
+    found = checks.undocumented_provenance(record, mislabelled)
+    assert [i.field for i in found] == ["name"]
+    assert "mislabel" in found[0].detail
+    assert found[0].suggested_confidence == 0.95, "a correct value is not retracted"
+
+    # Value is NOT in the record: an invented citation. This is the worst case
+    # in the taxonomy — a fabrication wearing the most authoritative label — so
+    # it is retracted outright.
+    invented = demo_product(specs=[Spec(
+        name="sound level", value="47", unit="dBA", source="document",
+        confidence=0.9, evidence="Datasheet states 47 dBA sound level.")])
+    found = checks.undocumented_provenance(record, invented)
+    assert found and found[0].suggested_confidence == 0.0
+    assert "invented" in found[0].detail
+
+    # With a document attached, citing it is simply legitimate.
+    record.document = "Sound Level: 47 dBA"
+    record.document_source = "https://www.frigidaire.com/x"
+    assert not checks.undocumented_provenance(record, invented)
+    assert not checks.undocumented_provenance(record, mislabelled)
+
+    # And the rule is wired into the deterministic pass, not just importable.
+    assert any(i.field == "name"
+               for i in checks.run_checks(
+                   RawRecord(sku="P-1", attributes={"description": "Dishwasher SS"}),
+                   mislabelled))
+
+
 def test_sourcing_policy_excludes_distributors_and_marketplaces():
     """The guidelines require the manufacturer's own site or documentation and
     exclude marketplaces and distributor sites explicitly. A spec lifted from a
